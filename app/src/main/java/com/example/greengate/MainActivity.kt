@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.ChevronRight
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.*
@@ -59,6 +60,8 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Notifications : Screen("notifications")
     data object LocationPicker : Screen("location_picker")
+    data object Bookings : Screen("bookings")
+    data object Visitors : Screen("visitors")
 }
 
 @Composable
@@ -92,6 +95,8 @@ fun MainScreen() {
             composable(Screen.Search.route) { PlaceholderScreen("Search Screen", navController) }
             composable(Screen.Notifications.route) { PlaceholderScreen("Notifications Screen", navController) }
             composable(Screen.LocationPicker.route) { PlaceholderScreen("Location Picker Screen", navController) }
+            composable(Screen.Bookings.route) { PlaceholderScreen("Bookings Screen", navController) }
+            composable(Screen.Visitors.route) { PlaceholderScreen("Visitors Screen", navController) }
         }
     }
 }
@@ -116,7 +121,7 @@ fun HomeScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(24.dp))
         AnnouncementsBanner { navController.navigate(Screen.Announcements.route) }
         Spacer(modifier = Modifier.height(24.dp))
-        TodayAtAGlance()
+        TodayAtAGlance(navController)
         Spacer(modifier = Modifier.height(130.dp))
     }
 }
@@ -267,7 +272,7 @@ fun CommunityAnnouncementCard(onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("View", color = AccentPeachDeep, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Icon(
-                    Icons.Rounded.ChevronRight,
+                    Icons.AutoMirrored.Rounded.ChevronRight,
                     contentDescription = null,
                     tint = AccentPeachDeep,
                     modifier = Modifier.size(18.dp)
@@ -430,7 +435,7 @@ fun AnnouncementsBanner(onClick: () -> Unit) {
 }
 
 @Composable
-fun TodayAtAGlance() {
+fun TodayAtAGlance(navController: NavController) {
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = Color.White,
@@ -454,17 +459,20 @@ fun TodayAtAGlance() {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                GlanceItem("2", "Bookings Confirmed", SoftGreen)
-                GlanceItem("1", "Visitor Expected", SoftPeach)
-                GlanceItem("0", "New Announcements", SoftGray)
+                GlanceItem("2", "Bookings Confirmed", SoftGreen) { navController.navigate(Screen.Bookings.route) }
+                GlanceItem("1", "Visitor Expected", SoftPeach) { navController.navigate(Screen.Visitors.route) }
+                GlanceItem("0", "New Announcements", SoftGray) { navController.navigate(Screen.Announcements.route) }
             }
         }
     }
 }
 
 @Composable
-fun GlanceItem(count: String, label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
+fun GlanceItem(count: String, label: String, color: Color, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically, 
+        modifier = Modifier.padding(end = 4.dp).clickable { onClick() }
+    ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
