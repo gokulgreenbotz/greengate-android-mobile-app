@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="cream_background">#FFF9F8F3</color>
-    <color name="primary_sage">#FF7D9B76</color>
+    <color name="background_cream">#FFFDFCF8</color>
+    <color name="cream_background">#FFFDFCF8</color>
+    <color name="primary_green">#FF6B8F71</color>
+    <color name="primary_sage">#FF6B8F71</color>
     <color name="peach_accent">#FFE4A68E</color>
     <color name="text_dark">#FF2C3329</color>
     <color name="black">#FF000000</color>
