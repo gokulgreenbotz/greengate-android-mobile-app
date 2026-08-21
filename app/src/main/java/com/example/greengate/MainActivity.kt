@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.ChevronRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.*
@@ -76,7 +76,7 @@ fun MainScreen() {
                 BottomNavigationBar(navController, currentRoute)
             }
         },
-        containerColor = BackgroundCream
+        containerColor = BackgroundGreen
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -91,7 +91,7 @@ fun MainScreen() {
             composable(Screen.InviteVisitors.route) { PlaceholderScreen("Invite Visitors Screen", navController) }
             composable(Screen.EForms.route) { PlaceholderScreen("E-Forms Screen", navController) }
             composable(Screen.Feedback.route) { PlaceholderScreen("Feedback Screen", navController) }
-            composable(Screen.Announcements.route) { PlaceholderScreen("Announcements Screen", navController) }
+            composable(Screen.Announcements.route) { AnnouncementsScreen(navController) }
             composable(Screen.Search.route) { PlaceholderScreen("Search Screen", navController) }
             composable(Screen.Notifications.route) { PlaceholderScreen("Notifications Screen", navController) }
             composable(Screen.LocationPicker.route) { PlaceholderScreen("Location Picker Screen", navController) }
@@ -128,9 +128,25 @@ fun HomeScreen(navController: NavController) {
 
 @Composable
 fun PlaceholderScreen(title: String, navController: NavController) {
-    Box(modifier = Modifier.fillMaxSize().background(BackgroundCream), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundGreen), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextDark)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { navController.popBackStack() },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)
+            ) {
+                Text("Go Back")
+            }
+        }
+    }
+}
+
+@Composable
+fun AnnouncementsScreen(navController: NavController) {
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundGreen), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Announcements Screen", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextDark)
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { navController.popBackStack() },
@@ -163,7 +179,7 @@ fun HeaderSection(navController: NavController) {
                 Icon(
                     Icons.Rounded.Eco,
                     contentDescription = null,
-                    tint = PrimaryGreen,
+                    tint = Color(0xFF81C784),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -213,7 +229,7 @@ fun HeaderSection(navController: NavController) {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(AccentPeachDeep, CircleShape)
+                            .background(Color(0xFFFF8A65), CircleShape)
                             .align(Alignment.TopEnd)
                             .offset(x = (-4).dp, y = 4.dp)
                     )
@@ -227,7 +243,7 @@ fun HeaderSection(navController: NavController) {
 fun CommunityAnnouncementCard(onClick: () -> Unit) {
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SoftPeach),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7F2)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
@@ -238,13 +254,13 @@ fun CommunityAnnouncementCard(onClick: () -> Unit) {
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .background(SoftCoral, RoundedCornerShape(16.dp)),
+                    .background(Color(0xFFFFEBDD), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Rounded.Campaign,
                     contentDescription = null,
-                    tint = AccentPeachDeep,
+                    tint = Color(0xFFFF8A65),
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -253,7 +269,7 @@ fun CommunityAnnouncementCard(onClick: () -> Unit) {
                 Text(
                     text = "Community Announcement",
                     fontSize = 12.sp,
-                    color = AccentPeachDeep,
+                    color = Color(0xFFFF8A65),
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
@@ -270,11 +286,11 @@ fun CommunityAnnouncementCard(onClick: () -> Unit) {
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("View", color = AccentPeachDeep, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("View", color = Color(0xFFFF8A65), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Icon(
-                    Icons.AutoMirrored.Rounded.ChevronRight,
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = AccentPeachDeep,
+                    tint = Color(0xFFFF8A65),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -290,8 +306,8 @@ fun ActionGrid(navController: NavController) {
                 title = "Book Facility",
                 subtitle = "Reserve amenities with ease",
                 icon = Icons.Rounded.SportsTennis,
-                backgroundColor = SoftGreen,
-                iconColor = PrimaryGreenDark,
+                backgroundColor = Color(0xFFF1F8F1),
+                iconColor = Color(0xFF81C784),
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate(Screen.BookFacility.route) }
             )
@@ -299,8 +315,8 @@ fun ActionGrid(navController: NavController) {
                 title = "Invite Visitors",
                 subtitle = "Create visitor passes quickly",
                 icon = Icons.Rounded.Badge,
-                backgroundColor = SoftBlue,
-                iconColor = IconCircleBlue,
+                backgroundColor = Color(0xFFF0F7FF),
+                iconColor = Color(0xFF90CAF9),
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate(Screen.InviteVisitors.route) }
             )
@@ -311,8 +327,8 @@ fun ActionGrid(navController: NavController) {
                 title = "E-Forms",
                 subtitle = "Submit and manage digital forms",
                 icon = Icons.Rounded.Description,
-                backgroundColor = SoftYellow,
-                iconColor = IconCircleYellow,
+                backgroundColor = Color(0xFFFFFBF0),
+                iconColor = Color(0xFFFFD54F),
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate(Screen.EForms.route) }
             )
@@ -320,8 +336,8 @@ fun ActionGrid(navController: NavController) {
                 title = "Feedback",
                 subtitle = "Share ideas and help us improve",
                 icon = Icons.Rounded.ChatBubble,
-                backgroundColor = SoftGreen,
-                iconColor = PrimaryGreenDark,
+                backgroundColor = Color(0xFFF1F8F1),
+                iconColor = Color(0xFF81C784),
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate(Screen.Feedback.route) }
             )
@@ -357,10 +373,10 @@ fun ActionCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = iconColor
+                    icon, 
+                    contentDescription = null, 
+                    modifier = Modifier.size(70.dp), 
+                    tint = iconColor.copy(alpha = 0.4f)
                 )
             }
             Column {
@@ -396,7 +412,7 @@ fun ActionCard(
 fun AnnouncementsBanner(onClick: () -> Unit) {
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SoftGreen),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F8F1)),
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(
@@ -412,7 +428,7 @@ fun AnnouncementsBanner(onClick: () -> Unit) {
                 Icon(
                     Icons.Rounded.Campaign,
                     contentDescription = null,
-                    tint = PrimaryGreenDark,
+                    tint = Color(0xFF81C784),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -446,10 +462,10 @@ fun TodayAtAGlance(navController: NavController) {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .background(SoftGreen, RoundedCornerShape(12.dp)),
+                        .background(Color(0xFFF1F8F1), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = PrimaryGreenDark, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = Color(0xFF81C784), modifier = Modifier.size(24.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(text = "Today at a Glance", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
@@ -459,9 +475,9 @@ fun TodayAtAGlance(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                GlanceItem("2", "Bookings Confirmed", SoftGreen) { navController.navigate(Screen.Bookings.route) }
-                GlanceItem("1", "Visitor Expected", SoftPeach) { navController.navigate(Screen.Visitors.route) }
-                GlanceItem("0", "New Announcements", SoftGray) { navController.navigate(Screen.Announcements.route) }
+                GlanceItem("2", "Bookings Confirmed", Color(0xFFE8F5E9)) { navController.navigate(Screen.Bookings.route) }
+                GlanceItem("1", "Visitor Expected", Color(0xFFFFF3E0)) { navController.navigate(Screen.Visitors.route) }
+                GlanceItem("0", "New Announcements", Color(0xFFF1F8E9)) { navController.navigate(Screen.Announcements.route) }
             }
         }
     }
@@ -469,10 +485,7 @@ fun TodayAtAGlance(navController: NavController) {
 
 @Composable
 fun GlanceItem(count: String, label: String, color: Color, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically, 
-        modifier = Modifier.padding(end = 4.dp).clickable { onClick() }
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp).clickable { onClick() }) {
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -540,7 +553,7 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
                 .align(Alignment.TopCenter)
                 .size(68.dp),
             shape = CircleShape,
-            color = PrimaryGreenDark,
+            color = Color(0xFF4F6F52),
             shadowElevation = 8.dp
         ) {
             Box(
@@ -554,6 +567,17 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
                     modifier = Modifier.size(34.dp)
                 )
             }
+        }
+        
+        // Indicator dot for Home
+        if (currentRoute == Screen.Home.route) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 48.dp, bottom = 8.dp)
+                    .size(4.dp)
+                    .background(Color(0xFF4F6F52), CircleShape)
+            )
         }
     }
 }
@@ -572,23 +596,15 @@ fun NavItem(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -
         Icon(
             icon,
             contentDescription = label,
-            tint = if (isSelected) PrimaryGreen else TextLight,
+            tint = if (isSelected) Color(0xFF4F6F52) else TextLight,
             modifier = Modifier.size(26.dp)
         )
         Text(
             text = label,
             fontSize = 11.sp,
-            color = if (isSelected) PrimaryGreen else TextLight,
+            color = if (isSelected) Color(0xFF4F6F52) else TextLight,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
-        if (isSelected) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .background(PrimaryGreen, CircleShape)
-            )
-        }
     }
 }
 
