@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -33,17 +34,103 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.greengate.core.call.ReceiverCallController
+import com.example.greengate.core.call.provider.ReceiverCallState
+import com.example.greengate.ui.screens.CallTestHarnessScreen
+import com.example.greengate.ui.screens.InCallScreen
+import com.example.greengate.ui.screens.IncomingCallScreen
 import com.example.greengate.ui.theme.*
 
+import android.content.Intent
+import android.os.Build
+import android.view.WindowManager
+import com.example.greengate.core.call.signaling.CallSignalingService
+
 class MainActivity : ComponentActivity() {
+
+    private lateinit var callController: ReceiverCallController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        configureLockscreenFlags()
+        callController = ReceiverCallController(applicationContext)
+
+        CallSignalingService.startService(applicationContext)
+        processCallIntent(intent)
+
         setContent {
             GreenGateTheme {
-                MainScreen()
+                MainScreen(controller = callController)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        configureLockscreenFlags()
+        processCallIntent(intent)
+    }
+
+    private fun configureLockscreenFlags() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val km = getSystemService(KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            km?.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            )
+        }
+    }
+
+    private fun processCallIntent(intent: Intent?) {
+        if (intent == null) return
+        val callId = intent.getStringExtra(CallSignalingService.EXTRA_CALL_ID) ?: return
+        val visitorName = intent.getStringExtra(CallSignalingService.EXTRA_VISITOR_NAME) ?: "Visitor at Kiosk"
+        val unitName = intent.getStringExtra(CallSignalingService.EXTRA_UNIT_NAME) ?: "Unit 1204"
+        val kioskName = intent.getStringExtra(CallSignalingService.EXTRA_KIOSK_NAME) ?: "Main Gate Kiosk"
+        val providerStr = intent.getStringExtra(CallSignalingService.EXTRA_PROVIDER) ?: "twilio"
+
+        val creds = if (providerStr.equals("vonage", ignoreCase = true)) {
+            val apiKey = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_API_KEY).takeUnless { it.isNullOrBlank() }
+                ?: com.example.greengate.core.call.provider.SharedCallConfig.vonageApiKey
+            val sessionId = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_SESSION_ID).takeUnless { it.isNullOrBlank() }
+                ?: com.example.greengate.core.call.provider.SharedCallConfig.vonageSessionId
+            val token = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_TOKEN).takeUnless { it.isNullOrBlank() }
+                ?: com.example.greengate.core.call.provider.SharedCallConfig.vonageToken
+
+            com.example.greengate.core.call.provider.ReceiverCallCredentials.Vonage(
+                callId = callId,
+                visitorName = visitorName,
+                unitName = unitName,
+                kioskName = kioskName,
+                apiKey = apiKey,
+                sessionId = sessionId,
+                token = token
+            )
+        } else {
+            val roomName = intent.getStringExtra(CallSignalingService.EXTRA_ROOM_NAME) ?: com.example.greengate.core.call.provider.SharedCallConfig.twilioRoomName
+            val accessToken = intent.getStringExtra(CallSignalingService.EXTRA_ACCESS_TOKEN) ?: com.example.greengate.core.call.provider.SharedCallConfig.twilioReceiverToken
+
+            com.example.greengate.core.call.provider.ReceiverCallCredentials.Twilio(
+                callId = callId,
+                visitorName = visitorName,
+                unitName = unitName,
+                kioskName = kioskName,
+                roomName = roomName,
+                accessToken = accessToken
+            )
+        }
+
+        callController.triggerIncomingCall(creds)
     }
 }
 
@@ -62,41 +149,129 @@ sealed class Screen(val route: String) {
     data object LocationPicker : Screen("location_picker")
     data object Bookings : Screen("bookings")
     data object Visitors : Screen("visitors")
+    data object CallTest : Screen("call_test")
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    controller: ReceiverCallController? = null
+) {
+    val context = LocalContext.current
+    val activeController = remember(controller) {
+        controller ?: ReceiverCallController(context.applicationContext)
+    }
+    val callState by activeController.state.collectAsState()
+    val remoteView by activeController.remoteView.collectAsState()
+    val isMuted by activeController.isMuted.collectAsState()
+    val isCameraOff by activeController.isCameraOff.collectAsState()
+    val gateUnlockedMessage by activeController.gateUnlockedMessage.collectAsState()
+
+    val signalingManager = remember {
+        com.example.greengate.core.call.signaling.CallSignalingManager(context.applicationContext, activeController).also { mgr ->
+            activeController.onCallEndedSignal = { callId ->
+                mgr.broadcastCallEnded(callId)
+            }
+        }
+    }
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[android.Manifest.permission.CAMERA] ?: false
+        val audioGranted = permissions[android.Manifest.permission.RECORD_AUDIO] ?: false
+        android.util.Log.d("MainActivity", "Permissions updated: camera=$cameraGranted, audio=$audioGranted")
+    }
+
+    LaunchedEffect(Unit) {
+        val permissionsToRequest = mutableListOf(
+            android.Manifest.permission.CAMERA,
+            android.Manifest.permission.RECORD_AUDIO
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add("android.permission.POST_NOTIFICATIONS")
+        }
+        permissionLauncher.launch(permissionsToRequest.toTypedArray())
+    }
+
+    DisposableEffect(Unit) {
+        CallSignalingService.startService(context.applicationContext)
+        signalingManager.startListening()
+        onDispose {
+            signalingManager.stop()
+        }
+    }
+
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    Scaffold(
-        bottomBar = {
-            if (isMainTab(currentRoute)) {
-                BottomNavigationBar(navController, currentRoute)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            bottomBar = {
+                if (isMainTab(currentRoute) && callState.isTerminal) {
+                    BottomNavigationBar(navController, currentRoute)
+                }
+            },
+            containerColor = BackgroundGreen
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier.padding(innerPadding)
+            ) {
+                composable(Screen.Home.route) { HomeScreen(navController) }
+                composable(Screen.Community.route) { PlaceholderScreen("Community Screen", navController) }
+                composable(Screen.Access.route) { PlaceholderScreen("Access Screen", navController) }
+                composable(Screen.Profile.route) { PlaceholderScreen("Profile Screen", navController) }
+                composable(Screen.BookFacility.route) { PlaceholderScreen("Book Facility Screen", navController) }
+                composable(Screen.InviteVisitors.route) { PlaceholderScreen("Invite Visitors Screen", navController) }
+                composable(Screen.EForms.route) { PlaceholderScreen("E-Forms Screen", navController) }
+                composable(Screen.Feedback.route) { PlaceholderScreen("Feedback Screen", navController) }
+                composable(Screen.Announcements.route) { AnnouncementsScreen(navController) }
+                composable(Screen.Search.route) { PlaceholderScreen("Search Screen", navController) }
+                composable(Screen.Notifications.route) { PlaceholderScreen("Notifications Screen", navController) }
+                composable(Screen.LocationPicker.route) { PlaceholderScreen("Location Picker Screen", navController) }
+                composable(Screen.Bookings.route) { PlaceholderScreen("Bookings Screen", navController) }
+                composable(Screen.Visitors.route) { PlaceholderScreen("Visitors Screen", navController) }
+                composable(Screen.CallTest.route) {
+                    CallTestHarnessScreen(
+                        controller = activeController,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
-        },
-        containerColor = BackgroundGreen
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Screen.Home.route) { HomeScreen(navController) }
-            composable(Screen.Community.route) { PlaceholderScreen("Community Screen", navController) }
-            composable(Screen.Access.route) { PlaceholderScreen("Access Screen", navController) }
-            composable(Screen.Profile.route) { PlaceholderScreen("Profile Screen", navController) }
-            composable(Screen.BookFacility.route) { PlaceholderScreen("Book Facility Screen", navController) }
-            composable(Screen.InviteVisitors.route) { PlaceholderScreen("Invite Visitors Screen", navController) }
-            composable(Screen.EForms.route) { PlaceholderScreen("E-Forms Screen", navController) }
-            composable(Screen.Feedback.route) { PlaceholderScreen("Feedback Screen", navController) }
-            composable(Screen.Announcements.route) { AnnouncementsScreen(navController) }
-            composable(Screen.Search.route) { PlaceholderScreen("Search Screen", navController) }
-            composable(Screen.Notifications.route) { PlaceholderScreen("Notifications Screen", navController) }
-            composable(Screen.LocationPicker.route) { PlaceholderScreen("Location Picker Screen", navController) }
-            composable(Screen.Bookings.route) { PlaceholderScreen("Bookings Screen", navController) }
-            composable(Screen.Visitors.route) { PlaceholderScreen("Visitors Screen", navController) }
+        }
+
+        // --- Call UI Overlays ---
+        when (val state = callState) {
+            is ReceiverCallState.Incoming -> {
+                IncomingCallScreen(
+                    credentials = state.credentials,
+                    onAccept = { activeController.answerCall() },
+                    onDecline = { activeController.declineCall() }
+                )
+            }
+
+            is ReceiverCallState.Connecting, is ReceiverCallState.Connected -> {
+                InCallScreen(
+                    controller = activeController,
+                    remoteView = remoteView,
+                    isMuted = isMuted,
+                    isCameraOff = isCameraOff,
+                    gateUnlockedMessage = gateUnlockedMessage,
+                    onHangUp = { activeController.hangUp() }
+                )
+            }
+
+            is ReceiverCallState.Ended -> {
+                // Auto dismiss ended state after brief view
+                LaunchedEffect(state) {
+                    kotlinx.coroutines.delay(1500L)
+                    activeController.resetToIdle()
+                }
+            }
+
+            ReceiverCallState.Idle -> Unit
         }
     }
 }
@@ -114,6 +289,50 @@ fun HomeScreen(navController: NavController) {
             .padding(horizontal = 20.dp)
     ) {
         HeaderSection(navController)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Call Test Harness Banner
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { navController.navigate(Screen.CallTest.route) }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color(0xFF4CAF50), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Call,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Call Receiver Test Harness", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
+                    Text(text = "Test incoming calls from Kiosk device", fontSize = 12.sp, color = TextLight)
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextDark)
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
         CommunityAnnouncementCard { navController.navigate(Screen.Announcements.route) }
         Spacer(modifier = Modifier.height(24.dp))
@@ -605,13 +824,5 @@ fun NavItem(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -
             color = if (isSelected) Color(0xFF4F6F52) else TextLight,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
-    }
-}
-
-@Preview(showBackground = true, widthDp = 390, heightDp = 844)
-@Composable
-fun MainScreenPreview() {
-    GreenGateTheme {
-        MainScreen()
     }
 }
