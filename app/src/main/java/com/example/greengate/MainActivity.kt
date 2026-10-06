@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.ChevronRight
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.*
@@ -220,19 +220,19 @@ fun MainScreen(
                 modifier = Modifier.padding(innerPadding)
             ) {
                 composable(Screen.Home.route) { HomeScreen(navController) }
-                composable(Screen.Community.route) { PlaceholderScreen("Community Screen", navController) }
-                composable(Screen.Access.route) { PlaceholderScreen("Access Screen", navController) }
-                composable(Screen.Profile.route) { PlaceholderScreen("Profile Screen", navController) }
-                composable(Screen.BookFacility.route) { PlaceholderScreen("Book Facility Screen", navController) }
-                composable(Screen.InviteVisitors.route) { PlaceholderScreen("Invite Visitors Screen", navController) }
-                composable(Screen.EForms.route) { PlaceholderScreen("E-Forms Screen", navController) }
-                composable(Screen.Feedback.route) { PlaceholderScreen("Feedback Screen", navController) }
+                composable(Screen.Community.route) { PlaceholderScreen("Community", navController) }
+                composable(Screen.Access.route) { PlaceholderScreen("Access", navController) }
+                composable(Screen.Profile.route) { PlaceholderScreen("Profile", navController) }
+                composable(Screen.BookFacility.route) { PlaceholderScreen("Book Facility", navController) }
+                composable(Screen.InviteVisitors.route) { PlaceholderScreen("Invite Visitors", navController) }
+                composable(Screen.EForms.route) { PlaceholderScreen("E-Forms", navController) }
+                composable(Screen.Feedback.route) { PlaceholderScreen("Feedback", navController) }
                 composable(Screen.Announcements.route) { AnnouncementsScreen(navController) }
-                composable(Screen.Search.route) { PlaceholderScreen("Search Screen", navController) }
-                composable(Screen.Notifications.route) { PlaceholderScreen("Notifications Screen", navController) }
-                composable(Screen.LocationPicker.route) { PlaceholderScreen("Location Picker Screen", navController) }
-                composable(Screen.Bookings.route) { PlaceholderScreen("Bookings Screen", navController) }
-                composable(Screen.Visitors.route) { PlaceholderScreen("Visitors Screen", navController) }
+                composable(Screen.Search.route) { PlaceholderScreen("Search", navController) }
+                composable(Screen.Notifications.route) { PlaceholderScreen("Notifications", navController) }
+                composable(Screen.LocationPicker.route) { PlaceholderScreen("Location", navController) }
+                composable(Screen.Bookings.route) { PlaceholderScreen("Bookings", navController) }
+                composable(Screen.Visitors.route) { PlaceholderScreen("Visitors", navController) }
                 composable(Screen.CallTest.route) {
                     CallTestHarnessScreen(
                         controller = activeController,
@@ -507,7 +507,7 @@ fun CommunityAnnouncementCard(onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("View", color = Color(0xFFFF8A65), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Icon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    Icons.AutoMirrored.Rounded.ChevronRight,
                     contentDescription = null,
                     tint = Color(0xFFFF8A65),
                     modifier = Modifier.size(18.dp)
