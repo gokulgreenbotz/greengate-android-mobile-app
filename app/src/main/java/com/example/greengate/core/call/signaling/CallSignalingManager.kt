@@ -20,8 +20,10 @@ class CallSignalingManager(
     private val controller: ReceiverCallController
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
@@ -68,7 +70,8 @@ class CallSignalingManager(
                     if (event == "CALL_INITIATED" && (callId != lastProcessedCallId || timestamp > lastProcessedTimestamp)) {
                         lastProcessedCallId = callId
                         lastProcessedTimestamp = timestamp
-                        Log.i("CallSignalingManager", "HTTPS SIGNAL RECEIVED: INCOMING CALL from Kiosk! callId=$callId")
+                        Log.i("CallSignalingManager", "HTTPS SIGNAL RECEIVED: INCOMING CALL from Kiosk! callId=$callId " +
+                            "age(kioskClock->phoneClock)=${now - timestamp}ms")
                         handleIncomingCall(json)
                     } else if (event == "CALL_ENDED" && callId == controller.currentCredentials?.callId) {
                         lastProcessedCallId = null
@@ -78,8 +81,8 @@ class CallSignalingManager(
                 }
             }
         } catch (e: Exception) {
-            // Quiet log for polling checks
-            Log.d("CallSignalingManager", "Poll check: ${e.message}")
+            // Was Log.d, which hid relay timeouts / throttling completely.
+            Log.w("CallSignalingManager", "Poll error: ${e.message}")
         }
     }
 

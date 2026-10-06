@@ -23,15 +23,24 @@ import java.util.concurrent.TimeUnit
 
 class CallSignalingService : Service() {
 
+    // callTimeout caps the WHOLE request. Before, a stalled poll could hold the
+    // single poll thread for ~10 s (5 s connect + 5 s read) before the next
+    // 1.5 s tick, so one slow relay response delayed ringing by 10 s+.
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     private val signalingUrl = "https://kvdb.io/JvTpnXFCynR2tFAjEa8ysm/active_call"
     private var executor: ScheduledExecutorService? = null
     private var lastProcessedCallId: String? = null
     private var lastProcessedTimestamp: Long = 0
+    /** callId seen on the previous successful poll (edge detection). */
+    private var lastSeenCallId: String? = null
+    private var hasBaseline = false
+    private var consecutivePollFailures = 0
 
     companion object {
         const val CHANNEL_ID = "greengate_incoming_calls_channel"
@@ -147,30 +156,55 @@ class CallSignalingService : Service() {
                 .get()
                 .build()
 
+            val started = System.currentTimeMillis()
             val response = client.newCall(request).execute()
             response.use { resp ->
-                if (resp.isSuccessful) {
-                    val bodyStr = resp.body?.string() ?: return
-                    if (bodyStr.isBlank() || bodyStr.trim() == "null") return
+                if (!resp.isSuccessful) {
+                    consecutivePollFailures++
+                    Log.w("CallSignalingService", "Poll HTTP ${resp.code} (failures in a row=$consecutivePollFailures)")
+                    return
+                }
+                consecutivePollFailures = 0
+                val bodyStr = resp.body?.string() ?: return
+                if (bodyStr.isBlank() || bodyStr.trim() == "null") return
 
-                    val json = JSONObject(bodyStr)
-                    val event = json.optString("event")
-                    val callId = json.optString("callId")
-                    val timestamp = json.optLong("timestamp", 0)
+                val json = JSONObject(bodyStr)
+                val event = json.optString("event")
+                val callId = json.optString("callId")
+                val timestamp = json.optLong("timestamp", 0)
+                val now = System.currentTimeMillis()
 
-                    val now = System.currentTimeMillis()
-                    if (now - timestamp > 45_000L) return
+                // FIX: the old check `now - timestamp > 45 s` compared the KIOSK's
+                // clock with the PHONE's clock. Kiosks often run with a drifted
+                // clock, so every signal looked "old" and the background service
+                // never rang — the call only appeared once the app was opened.
+                // Now: a callId that changes between two polls is a new call,
+                // whatever the clocks say. The clock check is only used for the
+                // very first poll after the service starts (to avoid re-ringing a
+                // call that was already on the relay before we started).
+                val isNewCallId = callId.isNotBlank() && callId != lastSeenCallId
+                val firstPoll = !hasBaseline
+                hasBaseline = true
+                lastSeenCallId = callId
 
-                    if (event == "CALL_INITIATED" && (callId != lastProcessedCallId || timestamp > lastProcessedTimestamp)) {
-                        lastProcessedCallId = callId
-                        lastProcessedTimestamp = timestamp
-                        Log.i("CallSignalingService", "BACKGROUND SIGNAL RECEIVED: INCOMING CALL! callId=$callId")
-                        triggerIncomingCallNotificationAndActivity(json)
+                if (event == "CALL_INITIATED" && isNewCallId && callId != lastProcessedCallId) {
+                    if (firstPoll && Math.abs(now - timestamp) > 45_000L) {
+                        Log.i("CallSignalingService", "Skipping pre-existing signal on first poll callId=$callId")
+                        return
                     }
+                    lastProcessedCallId = callId
+                    lastProcessedTimestamp = timestamp
+                    Log.i(
+                        "CallSignalingService",
+                        "BACKGROUND SIGNAL RECEIVED callId=$callId pollMs=${now - started} " +
+                            "age(kioskClock->phoneClock)=${now - timestamp}ms"
+                    )
+                    triggerIncomingCallNotificationAndActivity(json)
                 }
             }
         } catch (e: Exception) {
-            Log.d("CallSignalingService", "Poll error: ${e.message}")
+            consecutivePollFailures++
+            Log.w("CallSignalingService", "Poll error (${consecutivePollFailures} in a row): ${e.message}")
         }
     }
 

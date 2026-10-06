@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,13 +66,18 @@ fun InCallScreen(
     ) {
         // 1. Remote Kiosk Video Stream (Full Screen)
         if (remoteView != null) {
-            AndroidView(
-                factory = {
-                    (remoteView.parent as? ViewGroup)?.removeView(remoteView)
-                    remoteView
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+            // key(): if the provider hands us a *new* remote view (e.g. Vonage
+            // re-subscribes to a fresher kiosk stream) AndroidView must be
+            // rebuilt — its factory only runs once per composition key.
+            key(remoteView) {
+                AndroidView(
+                    factory = {
+                        (remoteView.parent as? ViewGroup)?.removeView(remoteView)
+                        remoteView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         } else {
             Box(
                 modifier = Modifier
@@ -90,7 +96,10 @@ fun InCallScreen(
         }
 
         // 2. Local Resident Preview Thumbnail (Top Right)
-        val localView = remember(isCameraOff) {
+        // Keyed on remoteView too: the Vonage publisher is only created after the
+        // session connects, so on first composition this was always null and
+        // the local preview never appeared.
+        val localView = remember(isCameraOff, remoteView) {
             if (!isCameraOff) controller.createLocalView(context) else null
         }
 

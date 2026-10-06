@@ -162,6 +162,10 @@ class ReceiverCallController(
 
     private fun cleanup() {
         ringTimeoutJob?.cancel()
+        // FIX: always tear the provider session down. Before, a new incoming
+        // call (or resetToIdle) just dropped the reference, leaving the old
+        // Twilio/Vonage connection — mic and all — alive in the room.
+        activeSession?.let { s -> runCatching { s.disconnect(EndReason.LOCAL_HANGUP) } }
         callJob?.cancel()
         audioController.deactivate()
         activeSession = null

@@ -49,8 +49,12 @@ class TwilioReceiverSession(
     private var isMicEnabled = true
     private var isCameraEnabled = true
 
+    /** Set once we decide this call is over; any late onConnected must leave. */
+    @Volatile private var torndown = false
+
     override suspend fun connect() {
         _state.value = ReceiverCallState.Connecting
+        Log.i("TwilioReceiverSession", "connecting to room=${credentials.roomName}")
 
         try {
             // Create local audio track
@@ -130,15 +134,26 @@ class TwilioReceiverSession(
                 }
             }
 
-            Video.connect(context, connectOptions, object : Room.Listener {
+            // FIX: keep the Room handle from Video.connect() right away. Before,
+            // `room` was only set in onConnected, so hanging up / a kiosk
+            // CALL_ENDED while still connecting called `room?.disconnect()` on
+            // null — the connect then completed in the background and left a
+            // ZOMBIE "receiver" participant in the room with its mic open.
+            room = Video.connect(context, connectOptions, object : Room.Listener {
                 override fun onConnected(room: Room) {
                     this@TwilioReceiverSession.room = room
+                    if (torndown) {
+                        Log.w("TwilioReceiverSession", "connected after hang-up — leaving room ${room.name}")
+                        room.disconnect()
+                        return
+                    }
+                    Log.i("TwilioReceiverSession", "connected room=${room.name} others=${room.remoteParticipants.map { it.identity }}")
                     _state.value = ReceiverCallState.Connected(System.currentTimeMillis())
                     room.remoteParticipants.forEach { bindParticipant(it) }
                 }
 
                 override fun onConnectFailure(room: Room, twilioException: TwilioException) {
-                    Log.e("TwilioReceiverSession", "Connect failure: ${twilioException.message}")
+                    Log.e("TwilioReceiverSession", "Connect failure code=${twilioException.code} room=${credentials.roomName}: ${twilioException.message}")
                     _state.value = ReceiverCallState.Ended(EndReason.PROVIDER_ERROR, twilioException.message)
                     release()
                 }
@@ -169,8 +184,13 @@ class TwilioReceiverSession(
 
                 override fun onParticipantDisconnected(room: Room, participant: RemoteParticipant) {
                     Log.d("TwilioReceiverSession", "Participant disconnected: ${participant.identity}")
-                    _state.value = ReceiverCallState.Ended(EndReason.REMOTE_HANGUP)
-                    release()
+                    // Only end when nobody is left (the kiosk hung up). And
+                    // actually LEAVE the room — before, this only released the
+                    // tracks, so the phone stayed in the room as a ghost.
+                    if (room.remoteParticipants.isEmpty() && !_state.value.isTerminal) {
+                        _state.value = ReceiverCallState.Ended(EndReason.REMOTE_HANGUP)
+                        release()
+                    }
                 }
 
                 override fun onRecordingStarted(room: Room) {}
@@ -224,14 +244,19 @@ class TwilioReceiverSession(
     }
 
     override fun disconnect(reason: EndReason) {
-        if (_state.value.isTerminal) return
-        _state.value = ReceiverCallState.Ended(reason)
-        room?.disconnect()
-        room = null
+        // Always leave the room, even if we already think the call is over —
+        // the old early-return is how ghost participants survived.
+        if (!_state.value.isTerminal) _state.value = ReceiverCallState.Ended(reason)
         release()
     }
 
     private fun release() {
+        torndown = true
+        room?.let { r ->
+            runCatching { r.disconnect() }
+                .onFailure { Log.w("TwilioReceiverSession", "room.disconnect failed", it) }
+        }
+        room = null
         remoteVideoTrack?.let { track ->
             remoteVideoView?.let { track.removeSink(it) }
         }

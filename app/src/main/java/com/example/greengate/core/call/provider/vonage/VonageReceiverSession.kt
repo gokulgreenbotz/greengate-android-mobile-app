@@ -7,6 +7,8 @@ import com.example.greengate.core.call.provider.EndReason
 import com.example.greengate.core.call.provider.ReceiverCallCredentials
 import com.example.greengate.core.call.provider.ReceiverCallSession
 import com.example.greengate.core.call.provider.ReceiverCallState
+import android.opengl.GLSurfaceView
+import com.opentok.android.BaseVideoRenderer
 import com.opentok.android.OpentokError
 import com.opentok.android.Publisher
 import com.opentok.android.PublisherKit
@@ -17,6 +19,9 @@ import com.opentok.android.SubscriberKit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+private const val TAG = "VonageReceiverSession"
+private const val KIOSK_STREAM_NAME = "GreenGate Kiosk"
 
 class VonageReceiverSession(
     private val context: Context,
@@ -32,6 +37,8 @@ class VonageReceiverSession(
     private var session: Session? = null
     private var publisher: Publisher? = null
     private var subscriber: Subscriber? = null
+
+    private var firstFrameLogged = false
 
     private var isMicEnabled = true
     private var isCameraEnabled = true
@@ -69,6 +76,11 @@ class VonageReceiverSession(
                             })
                             publishAudio = isMicEnabled
                             publishVideo = isCameraEnabled
+                            setStyle(BaseVideoRenderer.STYLE_VIDEO_SCALE, BaseVideoRenderer.STYLE_VIDEO_FILL)
+                            // Both Vonage views are GLSurfaceViews. Without this the
+                            // small local preview and the full-screen remote view
+                            // fight over z-order and the remote can render black.
+                            (view as? GLSurfaceView)?.setZOrderMediaOverlay(true)
                         }
                         session.publish(publisher)
                     } catch (e: Exception) {
@@ -84,25 +96,79 @@ class VonageReceiverSession(
                 }
 
                 override fun onStreamReceived(session: Session, stream: Stream) {
+                    Log.i(TAG, "stream received id=${stream.streamId} name='${stream.name}' " +
+                        "hasVideo=${stream.hasVideo()} created=${stream.creationTime}")
+
+                    // FIX: the kiosk reuses one Vonage session for every call, so
+                    // a stale stream from an earlier/crashed kiosk connection can
+                    // still be in it. The old code subscribed to *every* stream
+                    // and the last one to arrive won — often the dead one, giving
+                    // a black/empty remote view. Only take the kiosk's stream, and
+                    // prefer the newest one.
+                    val current = subscriber?.stream
+                    val isKiosk = stream.name.isNullOrBlank() || stream.name == KIOSK_STREAM_NAME
+                    if (!isKiosk) {
+                        Log.w(TAG, "ignoring non-kiosk stream '${stream.name}'")
+                        return
+                    }
+                    if (current != null && current.creationTime != null && stream.creationTime != null &&
+                        !stream.creationTime.after(current.creationTime)
+                    ) {
+                        Log.w(TAG, "ignoring older kiosk stream ${stream.streamId}")
+                        return
+                    }
+                    subscriber?.let { old ->
+                        runCatching { session.unsubscribe(old) }
+                        runCatching { old.destroy() }
+                        subscriber = null
+                        _remoteView.value = null
+                    }
+
                     try {
                         subscriber = Subscriber.Builder(context, stream).build().apply {
+                            setStyle(BaseVideoRenderer.STYLE_VIDEO_SCALE, BaseVideoRenderer.STYLE_VIDEO_FILL)
+                            subscribeToVideo = true
+                            subscribeToAudio = true
                             setSubscriberListener(object : SubscriberKit.SubscriberListener {
                                 override fun onConnected(sub: SubscriberKit) {
+                                    Log.i(TAG, "subscriber connected stream=${sub.stream?.streamId}")
                                     _remoteView.value = sub.view
                                 }
 
                                 override fun onDisconnected(sub: SubscriberKit) {
+                                    Log.w(TAG, "subscriber disconnected")
                                     _remoteView.value = null
                                 }
 
                                 override fun onError(sub: SubscriberKit, error: OpentokError) {
-                                    Log.e("VonageReceiverSession", "Subscriber error: ${error.message}")
+                                    Log.e(TAG, "SUBSCRIBER error ${error.errorCode}: ${error.message}")
                                 }
+                            })
+                            // Tells us *why* video is missing: "publishVideo" = kiosk
+                            // is not sending video (camera problem on the kiosk),
+                            // "quality" = network too poor, "subscribeToVideo" = us.
+                            setVideoListener(object : SubscriberKit.VideoListener {
+                                override fun onVideoDataReceived(sub: SubscriberKit) {
+                                    if (!firstFrameLogged) {
+                                        firstFrameLogged = true
+                                        Log.i(TAG, "first kiosk video frame received")
+                                    }
+                                }
+                                override fun onVideoDisabled(sub: SubscriberKit, reason: String) {
+                                    Log.w(TAG, "kiosk video DISABLED reason=$reason")
+                                }
+                                override fun onVideoEnabled(sub: SubscriberKit, reason: String) {
+                                    Log.i(TAG, "kiosk video enabled reason=$reason")
+                                }
+                                override fun onVideoDisableWarning(sub: SubscriberKit) {
+                                    Log.w(TAG, "kiosk video disable warning (poor network)")
+                                }
+                                override fun onVideoDisableWarningLifted(sub: SubscriberKit) {}
                             })
                         }
                         session.subscribe(subscriber)
                     } catch (e: Exception) {
-                        Log.e("VonageReceiverSession", "Failed to subscribe to stream", e)
+                        Log.e(TAG, "Failed to subscribe to stream", e)
                     }
                 }
 
@@ -115,7 +181,7 @@ class VonageReceiverSession(
                 }
 
                 override fun onError(session: Session, error: OpentokError) {
-                    Log.w("VonageReceiverSession", "Vonage session error ${error.errorCode}: ${error.message} — converting to active call fallback")
+                    Log.e(TAG, "Vonage SESSION error ${error.errorCode}: ${error.message}")
                     _state.value = ReceiverCallState.Connected(System.currentTimeMillis())
                 }
             })
@@ -143,8 +209,9 @@ class VonageReceiverSession(
     }
 
     override fun disconnect(reason: EndReason) {
-        if (_state.value.isTerminal) return
-        _state.value = ReceiverCallState.Ended(reason)
+        // Always release: an early return when already "Ended" could leave the
+        // phone connected to the session (same ghost problem as Twilio).
+        if (!_state.value.isTerminal) _state.value = ReceiverCallState.Ended(reason)
         release()
     }
 
