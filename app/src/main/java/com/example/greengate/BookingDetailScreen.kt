@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.HeadsetMic
 import androidx.compose.material.icons.outlined.Home
@@ -70,11 +71,11 @@ internal fun BookingDetailScreen(navController: NavController, booking: Booking)
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Spacer(Modifier.height(2.dp))
-                GlassCard(padding = 12.dp) {
+                GlassCard(padding = 12.dp, onClick = { navController.navigate(Screen.FacilityAbout.create(booking.facility.id)) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ArtworkTile(booking.facility, 104.dp)
                         Spacer(Modifier.width(14.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(booking.facility.name, fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
                             Spacer(Modifier.height(4.dp))
                             StatusPill(booking.statusTone(now))
@@ -83,6 +84,8 @@ internal fun BookingDetailScreen(navController: NavController, booking: Booking)
                             Text("${booking.timeRange} (${booking.durationLabel})", fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
                             Text(booking.guestsLabel, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
                         }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "About ${booking.facility.name}",
+                            tint = FacilityMuted, modifier = Modifier.size(24.dp))
                     }
                 }
                 if (status == BookingStatus.UPCOMING) {

@@ -79,11 +79,15 @@ internal fun GlassIconButton(icon: ImageVector, description: String, modifier: M
 }
 
 @Composable
-internal fun GlassCard(modifier: Modifier = Modifier, padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
+internal fun GlassCard(
+    modifier: Modifier = Modifier, padding: Dp = 16.dp, onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier.fillMaxWidth().shadow(2.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
             .clip(shape).background(Color(0xB3FFFFFF)).border(1.5.dp, FacilityGlassBorder, shape)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(padding),
         content = content
     )

@@ -213,8 +213,15 @@ internal fun FacilityAboutScreen(navController: NavController, facility: Facilit
                     .background(Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
                     .clickable(role = Role.Button) {
                         // Book Facility opens this facility's date and slot picker when it comes back.
-                        navController.previousBackStackEntry?.savedStateHandle?.set(ExpandFacilityKey, facility.id)
-                        navController.popBackStack()
+                        val previous = navController.previousBackStackEntry
+                        if (previous?.destination?.route == Screen.BookFacility.route) {
+                            previous.savedStateHandle[ExpandFacilityKey] = facility.id
+                            navController.popBackStack()
+                        } else {
+                            // Opened from elsewhere, e.g. Booking Details: start Book Facility afresh.
+                            navController.navigate(Screen.BookFacility.route) { popUpTo(Screen.BookFacility.route) { inclusive = true } }
+                            navController.currentBackStackEntry?.savedStateHandle?.set(ExpandFacilityKey, facility.id)
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) { Text("Book Now", fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
