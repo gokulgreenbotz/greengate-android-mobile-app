@@ -67,6 +67,8 @@ private val DeliveryCountryCodes = listOf("+65", "+60", "+62", "+63", "+66", "+9
 private val DeliveryValidFor = listOf(1 to "1 hour", 2 to "2 hours", 3 to "3 hours", 4 to "4 hours")
 
 private val DeliveryBoxShape = RoundedCornerShape(12.dp)
+// Text inputs match the Family / Friend form's InputField.
+private val DeliveryInputShape = RoundedCornerShape(16.dp)
 private val DeliveryBorder = Color(0xFFE3ECE9)
 private val DeliverySelectedFill = Color(0xFFE7F6F0)
 private val DeliveryErrorRed = Color(0xFFC2412D)
@@ -159,13 +161,13 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
                     }
                     Spacer(Modifier.height(6.dp))
                     GlassCard(padding = 14.dp) {
-                        DetailRow(Icons.Outlined.Person, "Name", error = nameError) {
-                            DeliveryTextField(name, { name = it.take(60) }, "e.g. Ahmad",
-                                KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next), nameError != null)
+                        DetailRow(Icons.Outlined.Person, "Name") {
+                            InputField(name, { name = it.take(60) }, "e.g. Ahmad", nameError,
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
                         }
-                        DetailRow(Icons.Outlined.Phone, "Mobile", error = mobileError) {
+                        DetailRow(Icons.Outlined.Phone, "Mobile") {
                             MobileField(countryCode, { countryCode = it }, mobile,
-                                { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError != null)
+                                { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError)
                         }
                         DetailRow(Icons.Outlined.CalendarMonth, "Date") {
                             ValueBox(onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight) {
@@ -180,8 +182,8 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
                                 DeliveryValidFor.map { it.second }) { validHours = DeliveryValidFor[it].first }
                         }
                         DetailRow(Icons.Outlined.Description, "Remarks", optional = true, last = true) {
-                            DeliveryTextField(remarks, { remarks = it.take(120) }, "e.g. Food, Parcel",
-                                KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done), false)
+                            InputField(remarks, { remarks = it.take(120) }, "e.g. Food, Parcel", null,
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
                         }
                     }
                 }
@@ -262,21 +264,17 @@ private fun PartnerChip(partner: DeliveryPartner, selected: Boolean, modifier: M
 /** One line of the details card: icon and label on the left, the value control on the right. */
 @Composable
 private fun DetailRow(
-    icon: ImageVector, label: String, optional: Boolean = false, error: String? = null, last: Boolean = false,
+    icon: ImageVector, label: String, optional: Boolean = false, last: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    Column(Modifier.padding(vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = BookingsDeepGreen, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(.8f)) {
-                Text(label, fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-                if (optional) Text("(Optional)", fontFamily = DMSans, fontSize = 11.sp, color = FacilityMuted)
-            }
-            Box(Modifier.weight(1.6f)) { content() }
+    Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = BookingsDeepGreen, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(.8f)) {
+            Text(label, fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+            if (optional) Text("(Optional)", fontFamily = DMSans, fontSize = 11.sp, color = FacilityMuted)
         }
-        if (error != null) Text(error, Modifier.align(Alignment.End).padding(top = 4.dp), fontFamily = DMSans,
-            fontSize = 12.sp, color = DeliveryErrorRed)
+        Box(Modifier.weight(1.6f)) { content() }
     }
     if (!last) HorizontalDivider(color = BookingsDivider)
 }
@@ -297,27 +295,21 @@ private fun ValueBox(
     }
 }
 
+/** Country code and number in one box, styled like the Family / Friend form's [InputField]. */
 @Composable
-private fun DeliveryTextField(value: String, onValueChange: (String) -> Unit, placeholder: String, keyboardOptions: KeyboardOptions, error: Boolean) {
-    ValueBox(error = error) {
-        if (value.isEmpty()) Text(placeholder, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted.copy(alpha = .6f), maxLines = 1)
-        BasicTextField(
-            value, onValueChange, Modifier.fillMaxWidth(), singleLine = true,
-            textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
-            cursorBrush = SolidColor(BookingsDeepGreen), keyboardOptions = keyboardOptions
-        )
-    }
-}
-
-@Composable
-private fun MobileField(code: String, onCode: (String) -> Unit, mobile: String, onMobile: (String) -> Unit, error: Boolean) {
+private fun MobileField(code: String, onCode: (String) -> Unit, mobile: String, onMobile: (String) -> Unit, error: String?) {
     var open by remember { mutableStateOf(false) }
-    ValueBox(error = error) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column {
+        Row(
+            Modifier.fillMaxWidth().height(54.dp).clip(DeliveryInputShape).background(Color.White)
+                .border(if (error != null) 1.5.dp else 1.dp, if (error != null) DeliveryErrorRed else DeliveryBorder, DeliveryInputShape)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box {
                 Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable(role = Role.DropdownList) { open = true }.padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(code, fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk)
+                    Text(code, fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk)
                     Icon(Icons.Rounded.KeyboardArrowDown, "Country code", tint = FacilityInk, modifier = Modifier.size(18.dp))
                 }
                 DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White) {
@@ -331,15 +323,16 @@ private fun MobileField(code: String, onCode: (String) -> Unit, mobile: String, 
             }
             Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(22.dp).background(DeliveryBorder))
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (mobile.isEmpty()) Text("8123 4567", fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted.copy(alpha = .6f), maxLines = 1)
+                if (mobile.isEmpty()) Text("8123 4567", fontFamily = DMSans, fontSize = 16.sp, color = FacilityMuted.copy(alpha = .6f), maxLines = 1)
                 BasicTextField(
                     mobile, onMobile, Modifier.fillMaxWidth(), singleLine = true,
-                    textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
+                    textStyle = TextStyle(fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk),
                     cursorBrush = SolidColor(BookingsDeepGreen),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next)
                 )
             }
         }
+        if (error != null) Text(error, Modifier.padding(start = 4.dp, top = 4.dp), fontFamily = DMSans, fontSize = 12.sp, color = DeliveryErrorRed)
     }
 }
 

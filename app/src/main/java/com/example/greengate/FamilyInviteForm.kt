@@ -364,8 +364,9 @@ private fun FieldLabel(text: String) {
         fontWeight = FontWeight.SemiBold, color = FacilityInk)
 }
 
+/** Text input shared by the invite forms (Family / Friend and Delivery). */
 @Composable
-private fun InputField(
+internal fun InputField(
     value: String, onValueChange: (String) -> Unit, placeholder: String, error: String?,
     keyboardOptions: KeyboardOptions, modifier: Modifier = Modifier
 ) {
