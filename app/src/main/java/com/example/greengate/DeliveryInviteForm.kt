@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -36,8 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,10 +46,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 import com.example.greengate.ui.theme.DMSans
 import java.util.Calendar
 
@@ -92,9 +87,12 @@ private fun deliveryDayName(day: BookingDay) = when (day) {
     else -> "${day.label()} ${day.year}"
 }
 
-/** Delivery invite: partner and rider details, then a summary before the invite is created. */
+/**
+ * Delivery invite, shown in place of the visitor types inside the Create Invite sheet: partner and
+ * rider details, then a summary before the invite is created. [onBack] returns to the types.
+ */
 @Composable
-internal fun DeliveryInviteScreen(navController: NavController) {
+internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated: (VisitorInvite) -> Unit) {
     var partner by rememberSaveable { mutableStateOf(DeliveryPartner.GRABFOOD) }
     var name by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf(DeliveryCountryCodes.first()) }
@@ -128,97 +126,76 @@ internal fun DeliveryInviteScreen(navController: NavController) {
         pickDate = false
     }
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding().imePadding()) {
-            GlassTopBar(
-                if (page == DeliveryPage.FORM) "Delivery Invite" else "Invite Summary",
-                onBack = { if (page == DeliveryPage.SUMMARY) page = DeliveryPage.FORM else navController.popBackStack() },
-                action = if (page == DeliveryPage.SUMMARY) ({
-                    Text("Edit", Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { page = DeliveryPage.FORM }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                        fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityGreen,
-                        textDecoration = TextDecoration.Underline)
-                }) else null
-            )
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = {
-                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
-                },
-                modifier = Modifier.weight(1f),
-                label = "deliveryPage"
-            ) { shown ->
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-                    if (shown == DeliveryPage.SUMMARY) DeliverySummary(draft(), partner)
-                    else {
-                        Text("Delivery Partner", Modifier.padding(top = 4.dp), fontFamily = DMSans, fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold, color = FacilityInk)
-                        Text("Select the delivery partner", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-                        Spacer(Modifier.height(12.dp))
-                        DeliveryPartner.entries.chunked(3).forEach { row ->
-                            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                row.forEach { p -> PartnerChip(p, p == partner, Modifier.weight(1f)) { partner = p } }
-                            }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        GlassCard(padding = 14.dp) {
-                            DetailRow(Icons.Outlined.Person, "Name", error = nameError) {
-                                DeliveryTextField(name, { name = it.take(60) }, "e.g. Ahmad",
-                                    KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next), nameError != null)
-                            }
-                            DetailRow(Icons.Outlined.Phone, "Mobile", error = mobileError) {
-                                MobileField(countryCode, { countryCode = it }, mobile,
-                                    { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError != null)
-                            }
-                            DetailRow(Icons.Outlined.CalendarMonth, "Date") {
-                                ValueBox(onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight) {
-                                    Text(deliveryDayName(day), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk, maxLines = 1)
-                                }
-                            }
-                            DetailRow(Icons.Outlined.Schedule, "Time") {
-                                ValueDropdown(clockLabel(startMinutes), startTimes.map { clockLabel(it) }) { startMinutes = startTimes[it] }
-                            }
-                            DetailRow(Icons.Outlined.Timer, "Valid for") {
-                                ValueDropdown(DeliveryValidFor.first { it.first == validHours }.second,
-                                    DeliveryValidFor.map { it.second }) { validHours = DeliveryValidFor[it].first }
-                            }
-                            DetailRow(Icons.Outlined.Description, "Remarks", optional = true, last = true) {
-                                DeliveryTextField(remarks, { remarks = it.take(120) }, "e.g. Food, Parcel",
-                                    KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done), false)
-                            }
+    Column(Modifier.fillMaxWidth().imePadding()) {
+        InviteFormHeader(
+            if (page == DeliveryPage.FORM) "Delivery Invite" else "Invite Summary",
+            if (page == DeliveryPage.FORM) "Create an invite for a food, parcel or courier drop" else "Check the details before creating it",
+            onBack = if (page == DeliveryPage.SUMMARY) ({ page = DeliveryPage.FORM }) else null,
+            onClose = onClose,
+        ) {
+            Image(painterResource(R.drawable.invite_delivery), null, Modifier.size(60.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
+            },
+            modifier = Modifier.weight(1f, fill = false),
+            label = "deliveryPage"
+        ) { shown ->
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                if (shown == DeliveryPage.SUMMARY) DeliverySummary(draft(), partner)
+                else {
+                    Text("Delivery Partner", Modifier.padding(top = 8.dp), fontFamily = DMSans, fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold, color = FacilityInk)
+                    Text("Select the delivery partner", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+                    Spacer(Modifier.height(12.dp))
+                    DeliveryPartner.entries.chunked(3).forEach { row ->
+                        Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { p -> PartnerChip(p, p == partner, Modifier.weight(1f)) { partner = p } }
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
-                }
-            }
-            Row(
-                Modifier.padding(16.dp).fillMaxWidth().height(58.dp)
-                    .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen)))
-                    .clickable(role = Role.Button) {
-                        if (page == DeliveryPage.SUMMARY) {
-                            // TODO: create the invite through the visitor API once it exists.
-                            val invite = VisitorStore.add(draft())
-                            navController.navigate(Screen.InviteCreated.create(invite.id)) {
-                                popUpTo(Screen.CreateInvite.route) { inclusive = true }
-                            }
-                            return@clickable
+                    Spacer(Modifier.height(6.dp))
+                    GlassCard(padding = 14.dp) {
+                        DetailRow(Icons.Outlined.Person, "Name", error = nameError) {
+                            DeliveryTextField(name, { name = it.take(60) }, "e.g. Ahmad",
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next), nameError != null)
                         }
-                        submitted = true
-                        if (name.isNotBlank() && mobileDigits.length in 7..15) page = DeliveryPage.SUMMARY
+                        DetailRow(Icons.Outlined.Phone, "Mobile", error = mobileError) {
+                            MobileField(countryCode, { countryCode = it }, mobile,
+                                { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError != null)
+                        }
+                        DetailRow(Icons.Outlined.CalendarMonth, "Date") {
+                            ValueBox(onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight) {
+                                Text(deliveryDayName(day), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk, maxLines = 1)
+                            }
+                        }
+                        DetailRow(Icons.Outlined.Schedule, "Time") {
+                            ValueDropdown(clockLabel(startMinutes), startTimes.map { clockLabel(it) }) { startMinutes = startTimes[it] }
+                        }
+                        DetailRow(Icons.Outlined.Timer, "Valid for") {
+                            ValueDropdown(DeliveryValidFor.first { it.first == validHours }.second,
+                                DeliveryValidFor.map { it.second }) { validHours = DeliveryValidFor[it].first }
+                        }
+                        DetailRow(Icons.Outlined.Description, "Remarks", optional = true, last = true) {
+                            DeliveryTextField(remarks, { remarks = it.take(120) }, "e.g. Food, Parcel",
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done), false)
+                        }
                     }
-                    .padding(horizontal = 22.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(Modifier.weight(1f))
-                Text(if (page == DeliveryPage.SUMMARY) "Create Invite" else "Continue",
-                    fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
+                Spacer(Modifier.height(16.dp))
             }
+        }
+        InviteFormButton(if (page == DeliveryPage.SUMMARY) "Create Invite" else "Continue") {
+            if (page == DeliveryPage.SUMMARY) {
+                // TODO: create the invite through the visitor API once it exists.
+                onCreated(VisitorStore.add(draft()))
+                return@InviteFormButton
+            }
+            submitted = true
+            if (name.isNotBlank() && mobileDigits.length in 7..15) page = DeliveryPage.SUMMARY
         }
     }
 }

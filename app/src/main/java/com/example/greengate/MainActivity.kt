@@ -290,14 +290,11 @@ fun MainScreen(
                 screen(Screen.Payments.route, underStatusBar = { true }) { PaymentsScreen(navController) }
                 screen(Screen.GreenBot.route) { GreenBotScreen(navController, voiceAllowed = botVoiceAllowed.value) }
                 screen(Screen.CreateInvite.route, underStatusBar = { true }) { entry ->
-                    when (val type = InviteType.entries.find { it.name == entry.arguments?.getString("type") }) {
-                        InviteType.FAMILY -> NewVisitorInviteScreen(navController)
-                        InviteType.DELIVERY -> DeliveryInviteScreen(navController)
-                        // Cab invites are made inside the Create Invite sheet.
-                        // TODO: replace with the Other form once it is designed.
-                        else -> Box(Modifier.fillMaxSize().statusBarsPadding()) {
-                            PlaceholderScreen("Invite: ${type?.title ?: "Visitor"}", navController)
-                        }
+                    // Family / Friend, Delivery and Cab invites are made inside the Create Invite sheet.
+                    // TODO: replace with the Other form once it is designed.
+                    val type = InviteType.entries.find { it.name == entry.arguments?.getString("type") }
+                    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+                        PlaceholderScreen("Invite: ${type?.title ?: "Visitor"}", navController)
                     }
                 }
                 screen(Screen.TransactionDetail.route, underStatusBar = { true }) { entry ->

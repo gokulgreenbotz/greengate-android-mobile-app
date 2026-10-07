@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -48,8 +50,9 @@ internal enum class InviteType(val title: String, val subtitle: String) {
 }
 
 /**
- * Slides up from the bottom when a resident starts a visitor invite. Cab invites are made right
- * here ([onCreated] gets the saved invite); the other types go to [onSelect].
+ * Slides up from the bottom when a resident starts a visitor invite. Family / Friend, Delivery and
+ * Cab invites are made right here ([onCreated] gets the saved invite); Other goes to [onSelect].
+ * Dragging the sheet down doesn't close it, so a half-filled form isn't lost; use Close or back.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,9 +62,10 @@ internal fun CreateInviteSheet(
     onCreated: (VisitorInvite) -> Unit,
     onSelect: (InviteType) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Vetoing Hidden stops a drag (or scrim tap) from dismissing; hide() below still animates out.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
     val scope = rememberCoroutineScope()
-    var cab by rememberSaveable { mutableStateOf(false) }
+    var form by rememberSaveable { mutableStateOf<InviteType?>(null) }
     // Let the sheet slide away before it leaves composition.
     fun close(then: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { then() }
@@ -72,13 +76,57 @@ internal fun CreateInviteSheet(
         containerColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
-        BackHandler(enabled = cab) { cab = false }
-        AnimatedContent(cab, label = "inviteType") { showCab ->
-            if (showCab) CabInviteForm(onClose = { close(onDismiss) }, onCreated = { invite -> close { onCreated(invite) } })
-            else InviteTypes(onHistory?.let { { close(it) } }, onClose = { close(onDismiss) }) { type ->
-                if (type == InviteType.CAB) cab = true else close { onSelect(type) }
+        BackHandler(enabled = form != null) { form = null }
+        AnimatedContent(form, label = "inviteType") { shown ->
+            val onClose = { close(onDismiss) }
+            val created = { invite: VisitorInvite -> close { onCreated(invite) } }
+            val backToTypes = { form = null }
+            when (shown) {
+                InviteType.FAMILY -> FamilyInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
+                InviteType.DELIVERY -> DeliveryInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
+                InviteType.CAB -> CabInviteForm(onClose = onClose, onCreated = created)
+                else -> InviteTypes(onHistory?.let { { close(it) } }, onClose = onClose) { type ->
+                    // TODO: make Other in the sheet too once its form is designed.
+                    if (type == InviteType.OTHER) close { onSelect(type) } else form = type
+                }
             }
         }
+    }
+}
+
+/** Top of an invite form in the sheet, laid out like Invite Cab's; [onBack] adds a back arrow. */
+@Composable
+internal fun InviteFormHeader(title: String, subtitle: String, onBack: (() -> Unit)?, onClose: () -> Unit, art: @Composable () -> Unit) {
+    Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) {
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = FacilityInk, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { art() }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+            Text(subtitle, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+        }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+/** The green button pinned under an invite form in the sheet. */
+@Composable
+internal fun InviteFormButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 20.dp).fillMaxWidth().height(54.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
     }
 }
 

@@ -37,7 +37,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -146,16 +145,8 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
     }
 
     Column(Modifier.fillMaxWidth().imePadding()) {
-        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        InviteFormHeader("Invite Cab", "Create a cab invite for pickup or drop", onBack = null, onClose = onClose) {
             Image(painterResource(R.drawable.cab_invite_header), null, Modifier.size(60.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Invite Cab", fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text("Create a cab invite for pickup or drop", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-            }
-            Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
-            }
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.padding(horizontal = 20.dp)) {
@@ -298,15 +289,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
             }
             Spacer(Modifier.height(16.dp))
         }
-        Box(
-            Modifier.padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 20.dp).fillMaxWidth().height(54.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
-                .clickable(role = Role.Button) { create() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Create Invite", fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-        }
+        InviteFormButton("Create Invite") { create() }
     }
 }
 

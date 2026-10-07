@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.EventRepeat
@@ -48,10 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 import com.example.greengate.ui.theme.DMSans
 import java.util.Calendar
 import java.util.TimeZone
@@ -77,9 +74,12 @@ private fun startTimesFor(day: BookingDay): List<Int> {
     return StartTimes.filter { it >= now / 30 * 30 }.ifEmpty { listOf(StartTimes.last()) }
 }
 
-/** Family / Friend invite: basic details, Additional Options, then a review before creating it. */
+/**
+ * Family / Friend invite, shown in place of the visitor types inside the Create Invite sheet:
+ * basic details, Additional Options, then a review. [onBack] returns to the types.
+ */
 @Composable
-internal fun NewVisitorInviteScreen(navController: NavController) {
+internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated: (VisitorInvite) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf(CountryCodes.first()) }
     var mobile by rememberSaveable { mutableStateOf("") }
@@ -92,7 +92,6 @@ internal fun NewVisitorInviteScreen(navController: NavController) {
     if (startMinutes !in startTimes) startMinutes = startTimes.first()
     var validHours by rememberSaveable { mutableIntStateOf(2) }
     var pickDate by remember { mutableStateOf(false) }
-    var switchType by remember { mutableStateOf(false) }
     // All pages live here so nothing typed is lost moving between them.
     var page by rememberSaveable { mutableStateOf(InvitePage.BASIC) }
     var reviewFrom by rememberSaveable { mutableStateOf(InvitePage.BASIC) }
@@ -112,10 +111,12 @@ internal fun NewVisitorInviteScreen(navController: NavController) {
         repeat = options.repeat.takeIf { options.recurring }, notifyOnEntry = options.notifyOnEntry,
         maxEntries = options.maxEntries.toIntOrNull(), note = options.note.trim(), createdAt = System.currentTimeMillis()
     )
-    fun back() = when (page) {
-        InvitePage.BASIC -> navController.popBackStack().let { }
-        InvitePage.OPTIONS -> page = InvitePage.BASIC
-        InvitePage.REVIEW -> page = reviewFrom
+    fun back() {
+        when (page) {
+            InvitePage.BASIC -> onBack()
+            InvitePage.OPTIONS -> page = InvitePage.BASIC
+            InvitePage.REVIEW -> page = reviewFrom
+        }
     }
 
     BackHandler(enabled = page != InvitePage.BASIC) { back() }
@@ -123,123 +124,96 @@ internal fun NewVisitorInviteScreen(navController: NavController) {
         dayKey = listOf(picked.year, picked.month, picked.day)
         pickDate = false
     }
-    if (switchType) CreateInviteSheet(
-        onDismiss = { switchType = false },
-        onCreated = {
-            switchType = false
-            navController.navigate(Screen.InviteCreated.create(it.id)) { popUpTo(Screen.CreateInvite.route) { inclusive = true } }
-        }
-    ) { type ->
-        switchType = false
-        if (type != InviteType.FAMILY) navController.navigate(Screen.CreateInvite.create(type)) {
-            popUpTo(Screen.CreateInvite.route) { inclusive = true }
-        }
-    }
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding().imePadding()) {
-            GlassTopBar(
-                when (page) {
-                    InvitePage.BASIC -> "New Visitor Invite"
-                    InvitePage.OPTIONS -> "Additional Options"
-                    InvitePage.REVIEW -> "Review Invite"
-                },
-                onBack = { back() },
-                action = if (page == InvitePage.REVIEW) ({
-                    Text("Edit", Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { page = InvitePage.BASIC }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                        fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityGreen,
-                        textDecoration = TextDecoration.Underline)
-                }) else null
-            )
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = {
-                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
-                },
-                modifier = Modifier.weight(1f),
-                label = "invitePage"
-            ) { shown ->
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-                    when (shown) {
-                        InvitePage.OPTIONS -> AdditionalOptions(relationship, { relationship = it }, options) { options = it }
-                        InvitePage.REVIEW -> InviteReview(draft(), options)
-                        InvitePage.BASIC -> {
-                            TypeHeader(InviteType.FAMILY) { switchType = true }
-                            FieldLabel("Visitor Name *")
-                            InputField(name, { name = it.take(60) }, "e.g. John Lim", nameError,
-                                KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
-                            FieldLabel("Mobile Number *")
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                DropdownField(countryCode, CountryCodes, { countryCode = it }, Modifier.width(96.dp))
-                                InputField(mobile, { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, "8123 4567",
-                                    mobileError, KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done), Modifier.weight(1f))
-                            }
-                            FieldLabel("When")
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Row(
-                                    Modifier.weight(1.2f).height(54.dp).clip(FieldShape).background(Color.White)
-                                        .border(1.dp, FieldBorder, FieldShape).clickable(role = Role.Button) { pickDate = true }
-                                        .padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(dayLabel(day), Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk, maxLines = 1)
-                                    Icon(Icons.Outlined.CalendarMonth, "Choose date", tint = FacilityInk, modifier = Modifier.size(22.dp))
-                                }
-                                DropdownField(clockLabel(startMinutes), startTimes.map { clockLabel(it) },
-                                    { label -> startMinutes = startTimes.first { clockLabel(it) == label } }, Modifier.weight(1f))
-                            }
-                            FieldLabel("Valid for")
-                            DropdownField(
-                                ValidityOptions.first { it.first == validHours }.second, ValidityOptions.map { it.second },
-                                { label -> validHours = ValidityOptions.first { it.second == label }.first }, Modifier.fillMaxWidth()
-                            )
+    Column(Modifier.fillMaxWidth().imePadding()) {
+        InviteFormHeader(
+            title = when (page) {
+                InvitePage.BASIC -> InviteType.FAMILY.title
+                InvitePage.OPTIONS -> "Additional Options"
+                InvitePage.REVIEW -> "Review Invite"
+            },
+            subtitle = when (page) {
+                InvitePage.BASIC -> "Create an invite for people you know"
+                InvitePage.OPTIONS -> "Vehicle, entry and recurring settings"
+                InvitePage.REVIEW -> "Check the details before creating it"
+            },
+            onBack = if (page == InvitePage.BASIC) null else ({ back() }),
+            onClose = onClose,
+        ) {
+            Box(Modifier.size(60.dp)) {
+                Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(56.dp))
+                Image(painterResource(R.drawable.ic_clay_community_heart), null, Modifier.align(Alignment.BottomEnd).size(28.dp))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
+            },
+            modifier = Modifier.weight(1f, fill = false),
+            label = "invitePage"
+        ) { shown ->
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                when (shown) {
+                    InvitePage.OPTIONS -> AdditionalOptions(relationship, { relationship = it }, options) { options = it }
+                    InvitePage.REVIEW -> InviteReview(draft(), options)
+                    InvitePage.BASIC -> {
+                        FieldLabel("Visitor Name *")
+                        InputField(name, { name = it.take(60) }, "e.g. John Lim", nameError,
+                            KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
+                        FieldLabel("Mobile Number *")
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DropdownField(countryCode, CountryCodes, { countryCode = it }, Modifier.width(96.dp))
+                            InputField(mobile, { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, "8123 4567",
+                                mobileError, KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done), Modifier.weight(1f))
+                        }
+                        FieldLabel("When")
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
-                                Modifier.padding(top = 18.dp).clip(RoundedCornerShape(8.dp))
-                                    .clickable(role = Role.Button) { page = InvitePage.OPTIONS }.padding(vertical = 6.dp),
+                                Modifier.weight(1.2f).height(54.dp).clip(FieldShape).background(Color.White)
+                                    .border(1.dp, FieldBorder, FieldShape).clickable(role = Role.Button) { pickDate = true }
+                                    .padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Advanced options", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-                                Icon(Icons.Rounded.ChevronRight, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
+                                Text(dayLabel(day), Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk, maxLines = 1)
+                                Icon(Icons.Outlined.CalendarMonth, "Choose date", tint = FacilityInk, modifier = Modifier.size(22.dp))
                             }
+                            DropdownField(clockLabel(startMinutes), startTimes.map { clockLabel(it) },
+                                { label -> startMinutes = startTimes.first { clockLabel(it) == label } }, Modifier.weight(1f))
+                        }
+                        FieldLabel("Valid for")
+                        DropdownField(
+                            ValidityOptions.first { it.first == validHours }.second, ValidityOptions.map { it.second },
+                            { label -> validHours = ValidityOptions.first { it.second == label }.first }, Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            Modifier.padding(top = 18.dp).clip(RoundedCornerShape(8.dp))
+                                .clickable(role = Role.Button) { page = InvitePage.OPTIONS }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Advanced options", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+                            Icon(Icons.Rounded.ChevronRight, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
                 }
+                Spacer(Modifier.height(16.dp))
             }
-            Row(
-                Modifier.padding(16.dp).fillMaxWidth().height(58.dp)
-                    .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen)))
-                    .clickable(role = Role.Button) {
-                        if (page == InvitePage.REVIEW) {
-                            // TODO: create the invite through the visitor API once it exists.
-                            val invite = VisitorStore.add(draft())
-                            navController.navigate(Screen.InviteCreated.create(invite.id)) {
-                                popUpTo(Screen.CreateInvite.route) { inclusive = true }
-                            }
-                            return@clickable
-                        }
-                        submitted = true
-                        if (name.isNotBlank() && mobileDigits.length in 7..15) {
-                            reviewFrom = page
-                            page = InvitePage.REVIEW
-                        } else {
-                            // The missing details are on the first page; take the resident back to them.
-                            page = InvitePage.BASIC
-                        }
-                    }
-                    .padding(horizontal = 22.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(Modifier.weight(1f))
-                Text(if (page == InvitePage.REVIEW) "Create Invite" else "Next",
-                    fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                }
+        }
+        InviteFormButton(if (page == InvitePage.REVIEW) "Create Invite" else "Next") {
+            if (page == InvitePage.REVIEW) {
+                // TODO: create the invite through the visitor API once it exists.
+                onCreated(VisitorStore.add(draft()))
+                return@InviteFormButton
+            }
+            submitted = true
+            if (name.isNotBlank() && mobileDigits.length in 7..15) {
+                reviewFrom = page
+                page = InvitePage.REVIEW
+            } else {
+                // The missing details are on the first page; take the resident back to them.
+                page = InvitePage.BASIC
             }
         }
     }
@@ -381,25 +355,6 @@ private fun dayLabel(day: BookingDay): String {
         today -> "Today"
         tomorrow -> "Tomorrow"
         else -> "${day.label()} ${day.year}"
-    }
-}
-
-@Composable
-private fun TypeHeader(type: InviteType, onClick: () -> Unit) {
-    GlassCard(Modifier.clickable(role = Role.Button, onClick = onClick), padding = 10.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp)) {
-                Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(58.dp))
-                Image(painterResource(R.drawable.ic_clay_community_heart), null,
-                    Modifier.align(Alignment.BottomEnd).size(30.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(type.title, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text(type.subtitle, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-            }
-            Icon(Icons.Rounded.KeyboardArrowDown, "Change visitor type", tint = FacilityInk, modifier = Modifier.size(26.dp))
-        }
     }
 }
 
