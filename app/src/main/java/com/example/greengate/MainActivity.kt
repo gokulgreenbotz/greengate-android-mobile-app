@@ -4,6 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -137,6 +142,9 @@ sealed class Screen(val route: String) {
     data object Access : Screen("access")
     data object Profile : Screen("profile")
     data object BookFacility : Screen("book_facility")
+    data object FacilityAbout : Screen("facility/{id}") {
+        fun create(facilityId: String) = "facility/$facilityId"
+    }
     data object InviteVisitors : Screen("invite_visitors")
     data object EForms : Screen("e_forms")
     data object Feedback : Screen("feedback")
@@ -156,10 +164,20 @@ sealed class Screen(val route: String) {
         fun create(bookingId: String) = "booking/$bookingId"
     }
     data object Payments : Screen("payments")
+    data object GreenBot : Screen("green_bot")
+    data object CreateInvite : Screen("create_invite/{type}") {
+        internal fun create(type: InviteType) = "create_invite/${type.name}"
+    }
     data object TransactionDetail : Screen("transaction/{id}") {
         fun create(transactionId: String) = "transaction/$transactionId"
     }
     data object Visitors : Screen("visitors")
+    data object InviteCreated : Screen("invite_created/{id}") {
+        fun create(inviteId: String) = "invite_created/$inviteId"
+    }
+    data object InviteDetail : Screen("invite/{id}") {
+        fun create(inviteId: String) = "invite/$inviteId"
+    }
     data object CallTest : Screen("call_test")
     data object CommunityInfo : Screen("community_info")
 }
@@ -206,6 +224,9 @@ fun MainScreen(
         permissionLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
+    // Decode Book Facility's photos while Home is showing so the screen's slide-in doesn't stall on them.
+    LaunchedEffect(Unit) { FacilityImages.preload(context.applicationContext) }
+
     DisposableEffect(Unit) {
         CallSignalingService.startService(context.applicationContext)
         signalingManager.startListening()
@@ -217,6 +238,7 @@ fun MainScreen(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val botVoiceAllowed = rememberUpdatedState(callState.isTerminal)
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (AppPreferences.theme == AppTheme.ZERO) androidx.compose.foundation.Image(
@@ -236,7 +258,11 @@ fun MainScreen(
             val scaffoldPadding = rememberUpdatedState(innerPadding)
             NavHost(
                 navController = navController,
-                startDestination = Screen.Home.route
+                startDestination = Screen.Home.route,
+                enterTransition = { if (inBookingFlow()) bookingPushIn() else fadeIn(tween(NavFadeMillis)) },
+                exitTransition = { if (inBookingFlow()) bookingPushOut() else fadeOut(tween(NavFadeMillis)) },
+                popEnterTransition = { if (inBookingFlow()) bookingPopIn() else fadeIn(tween(NavFadeMillis)) },
+                popExitTransition = { if (inBookingFlow()) bookingPopOut() else fadeOut(tween(NavFadeMillis)) }
             ) {
                 fun screen(route: String, underStatusBar: () -> Boolean = { false }, content: @Composable (NavBackStackEntry) -> Unit) =
                     composable(route) { entry ->
@@ -247,6 +273,9 @@ fun MainScreen(
                 screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
                 screen(Screen.Profile.route) { ProfileScreen(navController, onLogout) }
                 screen(Screen.BookFacility.route, underStatusBar = { true }) { BookFacilityScreen(navController) }
+                screen(Screen.FacilityAbout.route, underStatusBar = { true }) { entry ->
+                    Facilities.find { it.id == entry.arguments?.getString("id") }?.let { FacilityAboutScreen(navController, it) }
+                }
                 screen(Screen.BookingPayment.route, underStatusBar = { true }) { entry ->
                     entry.arguments.bookingArgs()?.let {
                         BookingPaymentScreen(navController, it.facility, it.day, it.hour, it.guests)
@@ -259,6 +288,18 @@ fun MainScreen(
                     BookingStore.find(entry.arguments?.getString("id"))?.let { BookingDetailScreen(navController, it) }
                 }
                 screen(Screen.Payments.route, underStatusBar = { true }) { PaymentsScreen(navController) }
+                screen(Screen.GreenBot.route) { GreenBotScreen(navController, voiceAllowed = botVoiceAllowed.value) }
+                screen(Screen.CreateInvite.route, underStatusBar = { true }) { entry ->
+                    when (val type = InviteType.entries.find { it.name == entry.arguments?.getString("type") }) {
+                        InviteType.FAMILY -> NewVisitorInviteScreen(navController)
+                        InviteType.DELIVERY -> DeliveryInviteScreen(navController)
+                        // Cab invites are made inside the Create Invite sheet.
+                        // TODO: replace with the Other form once it is designed.
+                        else -> Box(Modifier.fillMaxSize().statusBarsPadding()) {
+                            PlaceholderScreen("Invite: ${type?.title ?: "Visitor"}", navController)
+                        }
+                    }
+                }
                 screen(Screen.TransactionDetail.route, underStatusBar = { true }) { entry ->
                     val id = entry.arguments?.getString("id")
                     transactionsOf(BookingStore.bookings).find { it.id == id }?.let { TransactionDetailScreen(navController, it) }
@@ -271,7 +312,13 @@ fun MainScreen(
                 screen(Screen.Notifications.route) { PlaceholderScreen("Notifications", navController) }
                 screen(Screen.LocationPicker.route) { PlaceholderScreen("Location", navController) }
                 screen(Screen.Bookings.route, underStatusBar = { true }) { MyBookingsScreen(navController) }
-                screen(Screen.Visitors.route) { PlaceholderScreen("Visitors", navController) }
+                screen(Screen.Visitors.route, underStatusBar = { true }) { VisitorManagementScreen(navController) }
+                screen(Screen.InviteCreated.route, underStatusBar = { true }) { entry ->
+                    VisitorStore.find(entry.arguments?.getString("id"))?.let { InviteCreatedScreen(navController, it) }
+                }
+                screen(Screen.InviteDetail.route, underStatusBar = { true }) { entry ->
+                    VisitorStore.find(entry.arguments?.getString("id"))?.let { InviteDetailScreen(navController, it) }
+                }
                 screen(Screen.CommunityInfo.route) { CommunityInfoScreen(navController) }
                 screen(Screen.CallTest.route) {
                     CallTestHarnessScreen(
@@ -315,6 +362,32 @@ fun MainScreen(
         }
     }
 }
+
+// NavHost's own default, kept for every screen outside the booking flow.
+private const val NavFadeMillis = 700
+private const val BookingSlideMillis = 380
+
+// Book Facility and the steps it leads to move like a stack: the new page slides in over the
+// old one, which drifts a quarter-width behind it, and Back plays the same thing in reverse.
+// Slides only, no fades: a partial alpha renders the whole screen offscreen every frame.
+private val BookingFlowRoutes = setOf(Screen.BookFacility.route, Screen.FacilityAbout.route, Screen.BookingPayment.route, Screen.BookingConfirmed.route)
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.inBookingFlow() =
+    initialState.destination.route in BookingFlowRoutes || targetState.destination.route in BookingFlowRoutes
+
+private fun <T> bookingSpec() = tween<T>(BookingSlideMillis, easing = FastOutSlowInEasing)
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPushIn() =
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, bookingSpec())
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPushOut() =
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, bookingSpec()) { it / 4 }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPopIn() =
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, bookingSpec()) { it / 4 }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPopOut() =
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, bookingSpec())
 
 // Bottom space comes from the route, never from whether the bar is showing right now: the bar
 // hides the moment a sub-page opens, and following it would resize the outgoing tab mid-transition

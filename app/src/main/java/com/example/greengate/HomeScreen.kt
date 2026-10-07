@@ -95,6 +95,15 @@ fun HomeScreen(navController: NavController) {
         return
     }
     var showSos by remember { mutableStateOf(false) }
+    var showInvite by remember { mutableStateOf(false) }
+    if (showInvite) CreateInviteSheet(
+        onDismiss = { showInvite = false },
+        onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
+        onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
+    ) { type ->
+        showInvite = false
+        navController.navigate(Screen.CreateInvite.create(type))
+    }
     Column(
         Modifier.fillMaxSize().then(if (AppPreferences.theme == AppTheme.ONE) Modifier.background(MarinaBackground) else Modifier).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -103,37 +112,23 @@ fun HomeScreen(navController: NavController) {
             MarinaHeader(navController, onSos = { showSos = true })
             CommunityAnnouncementCard { navController.navigate(Screen.Announcements.route) }
             Spacer(Modifier.height(9.dp))
-            ActionGrid(navController)
+            ActionGrid(navController) { showInvite = true }
             Spacer(Modifier.height(9.dp))
             TodayAtAGlance(navController)
+            Spacer(Modifier.height(9.dp))
+            GreenBotCard { navController.navigate(Screen.GreenBot.route) }
             Spacer(Modifier.height(9.dp))
             if (AppPreferences.theme == AppTheme.ONE) AnnouncementsBanner { navController.navigate(Screen.Announcements.route) }
             Spacer(Modifier.height(18.dp))
         }
     }
-    if (showSos) {
-        AlertDialog(
-            onDismissRequest = { showSos = false },
-            icon = { Icon(Icons.Rounded.Call, null, tint = MarinaCoral) },
-            title = { Text("Emergency assistance") },
-            text = { Text("An emergency contact has not been configured for this residence. For immediate help, call your local emergency number using your phone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSos = false
-                        navController.navigate(Screen.CallTest.route)
-                    }
-                ) {
-                    Text("Call Receiver Harness")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSos = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
+    if (showSos) SosScreen(
+        onDismiss = { showSos = false },
+        onCallReceiverHarness = {
+            showSos = false
+            navController.navigate(Screen.CallTest.route)
+        }
+    )
 }
 
 @Composable
@@ -232,7 +227,7 @@ private fun CommunityAnnouncementCard(onClick: () -> Unit) {
                 Text(if (AppPreferences.theme == AppTheme.ZERO) "Priority Announcements" else "Important Message", fontFamily = DMSans, fontSize = 11.sp, lineHeight = 16.sp, color = if (AppPreferences.theme == AppTheme.ZERO) MarinaGreen else MarinaCoral)
                 Spacer(Modifier.height(3.dp))
                 Text("Pool maintenance on Friday,\n10:00 AM – 12:00 PM", fontFamily = DMSans,
-                    fontSize = 12.sp, lineHeight = 16.sp, color = MarinaInk)
+                    fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = MarinaInk)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("View", fontFamily = DMSans, fontSize = 11.sp, lineHeight = 16.sp, color = if (AppPreferences.theme == AppTheme.ZERO) MarinaGreen else MarinaCoral)
@@ -258,7 +253,7 @@ private data class ActionIconSpec(
 )
 
 @Composable
-private fun ActionGrid(navController: NavController) {
+private fun ActionGrid(navController: NavController, onInvite: () -> Unit) {
     val iconSet = AppPreferences.iconSet
     val allIcons = remember {
         listOf(
@@ -293,7 +288,7 @@ private fun ActionGrid(navController: NavController) {
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 row.forEach { (index, spec) ->
                     ActionCard(if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.InviteVisitors.route) "Invite Visitors" else if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.Community.route) "My Community" else spec.title, spec.subtitle, Modifier.weight(1f), spec.color,
-                        onClick = { navController.navigate(spec.route) }) {
+                        onClick = { if (spec.route == Screen.InviteVisitors.route) onInvite() else navController.navigate(spec.route) }) {
                         val active = index == sequence.activeIndex
                         val progress = if (active) sequence.progress.value else 0f
                         val art = spec.layeredArt

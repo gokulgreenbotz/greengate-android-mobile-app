@@ -1,6 +1,10 @@
 package com.example.greengate
 
 import android.app.Activity
+import android.content.Context
+import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -22,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.OutdoorGrill
@@ -38,10 +43,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -53,6 +59,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import com.example.greengate.ui.theme.DMSans
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal val FacilityInk = Color(0xFF14232B)
 internal val FacilityMuted = Color(0xFF5B6B72)
@@ -91,9 +101,50 @@ internal val Facilities = listOf(
     Facility("tennis", "Tennis Court", FacilityCategory.TENNIS, R.drawable.facility_tennis_hd, Icons.Rounded.SportsTennis, R.drawable.ic_facility_tennis, 4, 0, "9:00 AM today"),
 )
 
+/**
+ * The facility photos and artwork are multi-megabyte PNGs. Decoding them with painterResource
+ * happens on the main thread in the screen's first frame and stalls the slide-in, so they are
+ * decoded here in the background, scaled to what the screen can show, and kept for reuse.
+ */
+internal object FacilityImages {
+    private val cache = mutableStateMapOf<Int, ImageBitmap>()
+    private val loading = Mutex()
+
+    operator fun get(@DrawableRes id: Int): ImageBitmap? = cache[id]
+
+    /** Safe to call repeatedly; images already decoded are skipped. */
+    suspend fun preload(context: Context) = loading.withLock {
+        val res = context.resources
+        val photoWidth = res.displayMetrics.widthPixels
+        val artworkWidth = (76 * res.displayMetrics.density).toInt()
+        Facilities.flatMap { listOf(it.photo to photoWidth, it.artwork to artworkWidth) }
+            .filter { (id, _) -> id !in cache }
+            .forEach { (id, width) -> cache[id] = withContext(Dispatchers.Default) { decode(res, id, width) } }
+    }
+
+    private fun decode(res: Resources, @DrawableRes id: Int, maxWidth: Int): ImageBitmap {
+        val full = BitmapFactory.decodeResource(res, id)
+        val bitmap = if (full.width <= maxWidth) full
+            else Bitmap.createScaledBitmap(full, maxWidth, full.height * maxWidth / full.width, true).also { full.recycle() }
+        // Uploads the texture now rather than on the first frame that draws it.
+        bitmap.prepareToDraw()
+        return bitmap.asImageBitmap()
+    }
+}
+
+@Composable
+private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
+    val bitmap = FacilityImages[id]
+    if (bitmap != null) Image(bitmap, null, modifier, contentScale = contentScale)
+    else Box(modifier)
+}
+
 @Composable
 fun BookFacilityScreen(navController: NavController) {
-    val activity = LocalContext.current as? Activity
+    val context = LocalContext.current
+    // Normally done already from Home; this covers opening the screen before that finished.
+    LaunchedEffect(Unit) { FacilityImages.preload(context) }
+    val activity = context as? Activity
     DisposableEffect(activity) {
         val bars = activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView) }
         bars?.isAppearanceLightStatusBars = false
@@ -101,7 +152,11 @@ fun BookFacilityScreen(navController: NavController) {
     }
     var category by remember { mutableStateOf(FacilityCategory.ALL) }
     // Only one facility's date and slot picker is open at a time.
-    var expandedName by remember { mutableStateOf<String?>(null) }
+    var expandedName by remember {
+        // "Book Now" on a facility's About page comes back here with that facility to open.
+        val fromAbout = navController.currentBackStackEntry?.savedStateHandle?.remove<String>(ExpandFacilityKey)
+        mutableStateOf(Facilities.find { it.id == fromAbout }?.name)
+    }
     val visible = Facilities.filter { category == FacilityCategory.ALL || it.category == category }
 
     Box(Modifier.fillMaxSize().background(FacilityBackdrop), contentAlignment = Alignment.TopCenter) {
@@ -127,7 +182,9 @@ fun BookFacilityScreen(navController: NavController) {
                 items(visible, key = { it.name }) { facility ->
                     val expanded = facility.name == expandedName
                     Column {
-                        FacilityCard(facility, expanded) { expandedName = if (expanded) null else facility.name }
+                        FacilityCard(facility, expanded, onAbout = { navController.navigate(Screen.FacilityAbout.create(facility.id)) }) {
+                            expandedName = if (expanded) null else facility.name
+                        }
                         AnimatedVisibility(
                             visible = expanded,
                             enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
@@ -194,7 +251,7 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
 }
 
 @Composable
-private fun FacilityCard(facility: Facility, expanded: Boolean, onClick: () -> Unit) {
+private fun FacilityCard(facility: Facility, expanded: Boolean, onAbout: () -> Unit, onClick: () -> Unit) {
     // The arrow turns to point at the open picker below.
     val arrowTurn by animateFloatAsState(if (expanded) 90f else 0f, label = "arrowTurn")
     val shape = RoundedCornerShape(24.dp)
@@ -203,11 +260,9 @@ private fun FacilityCard(facility: Facility, expanded: Boolean, onClick: () -> U
         shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
     ) {
         Box {
-            Image(
-                painterResource(facility.photo), null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(150.dp)
-            )
+            FacilityImage(facility.photo, Modifier.fillMaxWidth().height(150.dp).background(Color(0x332B6F80)), ContentScale.Crop)
             AvailabilityBadge(facility.slotsLeft, Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 12.dp))
+            AboutChip(facility.name, Modifier.align(Alignment.TopStart).padding(top = 12.dp, start = 12.dp), onAbout)
             // The info panel overlaps the photo's lower edge like a frosted sheet.
             Row(
                 Modifier.padding(start = 10.dp, end = 10.dp, top = 126.dp, bottom = 10.dp).fillMaxWidth()
@@ -221,7 +276,7 @@ private fun FacilityCard(facility: Facility, expanded: Boolean, onClick: () -> U
                 Column(Modifier.weight(1f)) {
                     Text(facility.name, fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
                     Text(
-                        "Max ${facility.maxPax} pax  •  ${if (facility.deposit > 0) "S$${facility.deposit} deposit" else "No deposit"}",
+                        "Max ${facility.maxPax} pax  â€¢  ${if (facility.deposit > 0) "S$${facility.deposit} deposit" else "No deposit"}",
                         fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted
                     )
                     Spacer(Modifier.height(6.dp))
@@ -283,5 +338,20 @@ private fun FacilityGlyph(icon: ImageVector, @DrawableRes artwork: Int, size: Dp
     val flat = AppPreferences.iconSet == IconSet.THREE &&
         (AppPreferences.theme == AppTheme.ONE || !AppPreferences.useReferenceArtwork)
     if (flat) Icon(icon, null, tint = Color(0xFF2BA383), modifier = Modifier.size(size * .7f))
-    else Image(painterResource(artwork), null, Modifier.size(size))
+    else FacilityImage(artwork, Modifier.size(size))
+}
+
+/** Opens the facility's About page: photos, site map, hours and terms. */
+@Composable
+private fun AboutChip(facilityName: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.height(34.dp).clip(RoundedCornerShape(50)).background(Color(0xE6FFFFFF))
+            .clickable(role = Role.Button, onClickLabel = "About $facilityName", onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Outlined.Info, null, tint = FacilityInk, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("About", fontFamily = DMSans, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+    }
 }

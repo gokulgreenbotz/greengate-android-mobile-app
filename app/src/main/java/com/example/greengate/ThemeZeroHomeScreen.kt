@@ -21,12 +21,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
@@ -34,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
@@ -64,84 +75,112 @@ internal fun ThemeZeroHomeScreen(navController: NavController) {
         onDispose { bars?.isAppearanceLightStatusBars = true }
     }
     var showSos by remember { mutableStateOf(false) }
+    var showInvite by remember { mutableStateOf(false) }
+    if (showInvite) CreateInviteSheet(
+        onDismiss = { showInvite = false },
+        onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
+        onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
+    ) { type ->
+        showInvite = false
+        navController.navigate(Screen.CreateInvite.create(type))
+    }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val scale = minOf(maxWidth.value, 600f) / 426f
-        // The cards start just below the unit chip (which ends at 293); spare space falls below them.
-        val headerHeight = 305f * scale
+        // The header takes the top 20% of the screen; the cards start right below it.
+        val headerHeight = LocalConfiguration.current.screenHeightDp * .2f
         Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().verticalScroll(rememberScrollState())) {
             ReferenceHeader(navController, scale, headerHeight.dp) { showSos = true }
             Column(Modifier.padding(horizontal = 18.u(scale)), verticalArrangement = Arrangement.spacedBy(9.u(scale))) {
                 ReferenceAnnouncement(scale) { navController.navigate(Screen.Announcements.route) }
-                ReferenceFeatures(navController, scale)
+                ReferenceFeatures(navController, scale) { showInvite = true }
                 ReferenceGlance(navController, scale)
+                GreenBotCard(scale) { navController.navigate(Screen.GreenBot.route) }
+                ReferenceAllAnnouncements(scale) { navController.navigate(Screen.Announcements.route) }
+                Spacer(Modifier.height(4.u(scale)))
             }
         }
     }
-    if (showSos) AlertDialog(
-        onDismissRequest = { showSos = false }, title = { Text("Emergency assistance") },
-        text = { Text("An emergency contact has not been configured for this residence. For immediate help, call your local emergency number using your phone.") },
-        confirmButton = { TextButton(onClick = { showSos = false }) { Text("Close") } }
+    if (showSos) SosScreen(
+        onDismiss = { showSos = false },
+        onCallReceiverHarness = {
+            showSos = false
+            navController.navigate(Screen.CallTest.route)
+        }
     )
 }
 
 @Composable
 private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(height)) {
-        Image(painterResource(R.drawable.greengate_logo), "Green Gate logo",
-            Modifier.offset(45.u(s), 30.u(s)).size(96.u(s)))
-        Text("Green Gate", Modifier.offset(38.u(s), 107.u(s)), color = Color.White,
-            fontFamily = DMSans, fontSize = 22.t(s), lineHeight = 27.t(s))
-        Text("SECURE · SAFE · TOGETHER", Modifier.offset(39.u(s), 135.u(s)), color = Color.White,
-            fontFamily = DMSans, fontSize = 5.5f.t(s), letterSpacing = 2.t(s))
-        ReferenceHeaderButton(Icons.Outlined.Search, "Search", 242f, 86f, s) { nav.navigate(Screen.Search.route) }
-        ReferenceHeaderButton(Icons.Rounded.Notifications, "Notifications", 288f, 86f, s) { nav.navigate(Screen.Notifications.route) }
-        Box(Modifier.offset(296.u(s), 69.u(s)).size(9.u(s)).background(Color(0xFFFF603D), CircleShape))
-        Box(Modifier.offset(312.u(s), 58.u(s)).size(53.u(s)).clip(CircleShape)
-            .background(Brush.radialGradient(listOf(Color(0xFFFF8053), Color(0xFFFF5238))))
-            .clickable(role = Role.Button, onClick = onSos)) {
-            Surface(Modifier.fillMaxSize(), shape = CircleShape, color = Color.Transparent,
-                border = BorderStroke(3.u(s), Color.White.copy(alpha = .85f))) {
-                Box(contentAlignment = Alignment.Center) { Text("SOS", color = Color.White, fontFamily = DMSans, fontSize = 15.t(s)) }
+    // Three compact rows: brand + actions, greeting + weather, community + unit.
+    // The block is at least 20% of the screen tall; extra room is shared between the rows.
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = height).statusBarsPadding()
+            .padding(start = 18.u(s), end = 14.u(s), top = 4.u(s), bottom = 8.u(s)),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.greengate_logo), "Green Gate logo", Modifier.size(34.u(s)))
+            Column(Modifier.weight(1f).padding(start = 6.u(s))) {
+                Text("Green Gate", color = Color.White, fontFamily = DMSans, fontSize = 16.t(s), lineHeight = 18.t(s))
+                Text("SECURE · SAFE · TOGETHER", color = Color.White, fontFamily = DMSans, fontSize = 5.t(s),
+                    lineHeight = 7.t(s), letterSpacing = 1.5f.t(s), maxLines = 1)
+            }
+            ReferenceHeaderButton(Icons.Outlined.Search, "Search", s) { nav.navigate(Screen.Search.route) }
+            Box {
+                ReferenceHeaderButton(Icons.Rounded.Notifications, "Notifications", s) { nav.navigate(Screen.Notifications.route) }
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.u(s), end = 8.u(s)).size(8.u(s)).background(Color(0xFFFF603D), CircleShape))
+            }
+            Box(Modifier.padding(horizontal = 3.u(s)).size(38.u(s)).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFFFF8053), Color(0xFFFF5238))))
+                .clickable(role = Role.Button, onClick = onSos)) {
+                Surface(Modifier.fillMaxSize(), shape = CircleShape, color = Color.Transparent,
+                    border = BorderStroke(2.u(s), Color.White.copy(alpha = .85f))) {
+                    Box(contentAlignment = Alignment.Center) { Text("SOS", color = Color.White, fontFamily = DMSans, fontSize = 11.t(s)) }
+                }
+            }
+            ReferenceHeaderButton(Icons.Rounded.Person, "Profile", s, profile = true) { nav.navigate(Screen.Profile.route) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Good Morning,", color = Color.White, fontFamily = DMSans, fontSize = 16.t(s), lineHeight = 20.t(s), fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Alex", color = Color.White, fontFamily = DMSans, fontSize = 30.t(s), lineHeight = 34.t(s), fontWeight = FontWeight.SemiBold)
+                    Image(painterResource(R.drawable.gg_leaf_accent), null, Modifier.padding(start = 2.u(s)).size(28.u(s)))
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(R.drawable.gg_weather_sunny), null, Modifier.size(38.u(s)))
+                    Text("28°", Modifier.padding(start = 3.u(s)), color = Color.White, fontFamily = DMSans, fontSize = 24.t(s), lineHeight = 28.t(s))
+                }
+                Text("Mostly Sunny", color = Color.White, fontFamily = DMSans, fontSize = 11.t(s), lineHeight = 14.t(s), maxLines = 1)
+                Text("Thu, 2 Oct", color = Color.White.copy(alpha = .9f), fontFamily = DMSans, fontSize = 9.t(s), lineHeight = 12.t(s), maxLines = 1)
             }
         }
-        ReferenceHeaderButton(Icons.Rounded.Person, "Profile", 390f, 86f, s, profile = true) { nav.navigate(Screen.Profile.route) }
-        Row(Modifier.offset(349.u(s), 118.u(s)), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.gg_weather_sunny), null, Modifier.size(30.u(s)))
-            Text("28°", color = Color.White, fontFamily = DMSans, fontSize = 20.t(s))
-        }
-        Text("Mostly Sunny", Modifier.offset(352.u(s), 143.u(s)), color = Color.White, fontFamily = DMSans, fontSize = 10.t(s))
-        Text("Thu, 2 Oct", Modifier.offset(369.u(s), 157.u(s)), color = Color.White.copy(alpha = .9f), fontFamily = DMSans, fontSize = 8.t(s))
-        Text("Good Morning,", Modifier.offset(32.u(s), 168.u(s)), color = Color.White,
-            fontFamily = DMSans, fontSize = 26.t(s), lineHeight = 31.t(s), fontWeight = FontWeight.Medium)
-        Row(Modifier.offset(33.u(s), 193.u(s)), verticalAlignment = Alignment.CenterVertically) {
-            Text("Alex", color = Color.White, fontFamily = DMSans, fontSize = 34.t(s), lineHeight = 39.t(s), fontWeight = FontWeight.Medium)
-            Image(painterResource(R.drawable.gg_leaf_accent), null, Modifier.padding(start = 2.u(s)).size(35.u(s)))
-        }
-        Row(Modifier.offset(31.u(s), 233.u(s)), verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.heightIn(min = 28.u(s)).clickable(role = Role.Button) { nav.navigate(Screen.LocationPicker.route) },
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.LocationOn, null, Modifier.size(17.u(s)), tint = Color.White)
-                Text("Marina Bay Residences", Modifier.padding(start = 4.u(s)), color = Color.White, fontFamily = DMSans, fontSize = 13.t(s))
-                Icon(Icons.Rounded.KeyboardArrowDown, null, Modifier.padding(start = 7.u(s)).size(20.u(s)), tint = Color.White)
+                Icon(Icons.Rounded.LocationOn, null, Modifier.size(15.u(s)), tint = Color.White)
+                Text("Marina Bay Residences", Modifier.padding(start = 3.u(s)), color = Color.White, fontFamily = DMSans,
+                    fontSize = 12.t(s), maxLines = 1)
             }
-            IconButton({ nav.navigate(Screen.CommunityInfo.route) }, Modifier.size(32.u(s))) {
-                Icon(Icons.Outlined.Info, "About Marina Bay Residences", Modifier.size(18.u(s)), tint = Color.White)
+            IconButton({ nav.navigate(Screen.CommunityInfo.route) }, Modifier.size(28.u(s))) {
+                Icon(Icons.Outlined.Info, "About Marina Bay Residences", Modifier.size(16.u(s)), tint = Color.White)
             }
-        }
-        Box(Modifier.offset(30.u(s), 263.u(s))) {
-            ReferenceChip("Tower A · Unit 12-03", Icons.Rounded.Apartment, 190f, s) { nav.navigate(Screen.LocationPicker.route) }
+            Spacer(Modifier.weight(1f))
+            ReferenceChip("Tower A · Unit 12-03", Icons.Rounded.Apartment, 168f, s) { nav.navigate(Screen.LocationPicker.route) }
         }
     }
 }
 
 @Composable
-private fun BoxScope.ReferenceHeaderButton(icon: ImageVector, label: String, x: Float, y: Float, s: Float, profile: Boolean = false, onClick: () -> Unit) {
-    Box(Modifier.offset((x - 24).u(s), (y - 24).u(s)).size(48.u(s)).semantics { contentDescription = label }
+private fun ReferenceHeaderButton(icon: ImageVector, label: String, s: Float, profile: Boolean = false, onClick: () -> Unit) {
+    Box(Modifier.size(42.u(s)).semantics { contentDescription = label }
         .clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Surface(Modifier.size(36.u(s)), shape = CircleShape, color = Color(0xEDF7FFFF)) {
+        Surface(Modifier.size(32.u(s)), shape = CircleShape, color = Color(0xEDF7FFFF)) {
             Box(contentAlignment = Alignment.Center) {
-                if (profile) ReferenceArt(intArrayOf(761, 150, 39, 46), Modifier.size(20.u(s), 24.u(s)), feather = true)
-                else Icon(icon, label, Modifier.size(20.u(s)), tint = if (label == "Notifications") Color(0xFF123D50) else GateInk)
+                if (profile) ReferenceArt(intArrayOf(761, 150, 39, 46), Modifier.size(17.u(s), 20.u(s)), feather = true)
+                else Icon(icon, label, Modifier.size(18.u(s)), tint = if (label == "Notifications") Color(0xFF123D50) else GateInk)
             }
         }
     }
@@ -160,12 +199,31 @@ private fun ReferenceChip(label: String, icon: ImageVector, width: Float, s: Flo
 }
 
 @Composable
-private fun ReferenceGlass(modifier: Modifier, s: Float, onClick: (() -> Unit)? = null, radius: Float = 17f, content: @Composable BoxScope.() -> Unit) {
+private fun ReferenceGlass(modifier: Modifier, s: Float, onClick: (() -> Unit)? = null, radius: Float = 17f, blurBackdrop: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     Surface(modifier.then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
         shape = RoundedCornerShape(radius.u(s)), color = Color.Transparent,
         border = BorderStroke(.75f.u(s), Color.White.copy(alpha = .9f))) {
-        Box(Modifier.background(Brush.linearGradient(listOf(Color(0xD8F9FFFC), Color(0xBED8F4EF)))), content = content)
+        Box {
+            if (blurBackdrop) BlurredBackdrop(Modifier.matchParentSize(), 18.u(s))
+            Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Color(0xD8F9FFFC), Color(0xBED8F4EF)))))
+            content()
+        }
     }
+}
+
+/**
+ * Frosted-glass backdrop: redraws the window background (drawn full-screen in MainActivity) blurred and
+ * aligned to this node's on-screen position. Blur needs API 31+; older devices fall back to the plain tint.
+ */
+@Composable
+private fun BlurredBackdrop(modifier: Modifier, radius: Dp) {
+    val painter = painterResource(R.drawable.gg_home_reference_background)
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var rootSize by remember { mutableStateOf(Size.Zero) }
+    Box(modifier
+        .onGloballyPositioned { offset = it.positionInRoot(); rootSize = it.findRootCoordinates().size.toSize() }
+        .blur(radius, BlurredEdgeTreatment.Rectangle)
+        .drawBehind { translate(-offset.x, -offset.y) { with(painter) { draw(rootSize) } } })
 }
 
 private val PriorityAnnouncements = listOf(
@@ -184,17 +242,20 @@ private fun ReferenceAnnouncement(s: Float, onClick: () -> Unit) {
             current = (current + 1) % PriorityAnnouncements.size
         }
     }
-    ReferenceGlass(Modifier.fillMaxWidth().height(AnnouncementCardHeight.u(s)), s, onClick) {
+    ReferenceGlass(Modifier.fillMaxWidth().height(AnnouncementCardHeight.u(s)), s, onClick, blurBackdrop = true) {
         ReferenceArt(intArrayOf(55, 780, 148, 116), Modifier.align(Alignment.CenterStart).padding(start = 12.u(s)).size(72.u(s), 59.u(s)), feather = true)
         Column(Modifier.align(Alignment.CenterStart).padding(start = 96.u(s), end = 82.u(s))) {
-            Text("Priority Announcements", color = GateInk, fontFamily = DMSans, fontSize = 15.t(s), lineHeight = 19.t(s), fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(2.u(s)))
+            // A small label over the message, which is what residents need to read.
+            Text("Priority Announcements", color = GateGreen, fontFamily = DMSans, fontSize = 11.t(s), lineHeight = 14.t(s),
+                fontWeight = FontWeight.Medium, letterSpacing = .4f.t(s))
+            Spacer(Modifier.height(3.u(s)))
             AnimatedContent(current, transitionSpec = {
                 (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
             }, label = "priorityAnnouncement") { index ->
-                Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 12.t(s), lineHeight = 16.t(s), minLines = 2, maxLines = 2)
+                Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
+                    fontWeight = FontWeight.Medium, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.height(7.u(s)))
+            Spacer(Modifier.height(6.u(s)))
             Row(horizontalArrangement = Arrangement.spacedBy(4.u(s)), verticalAlignment = Alignment.CenterVertically) {
                 PriorityAnnouncements.indices.forEach { index ->
                     val active = index == current
@@ -221,14 +282,15 @@ private val ReferenceActions = listOf(
 )
 
 @Composable
-private fun ReferenceFeatures(nav: NavController, s: Float) {
+private fun ReferenceFeatures(nav: NavController, s: Float, onInvite: () -> Unit) {
     val actions = if (AppPreferences.showFeedback) ReferenceActions + ReferenceFeature("Feedback", "Share ideas and\nhelp us improve", Screen.Feedback.route, intArrayOf(510, 1207, 178, 143)) else ReferenceActions
     val sequence = if (AppPreferences.useReferenceArtwork) null else rememberActionIconSequence(AppPreferences.iconSet, actions.map { 1800 })
     Column(verticalArrangement = Arrangement.spacedBy(7.u(s))) {
         actions.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.u(s))) {
                 pair.forEach { feature ->
-                    ReferenceGlass(Modifier.weight(1f).height(FeatureCardHeight.u(s)), s, { nav.navigate(feature.route) }, radius = 13f) {
+                    ReferenceGlass(Modifier.weight(1f).height(FeatureCardHeight.u(s)), s, { if (feature.route == Screen.InviteVisitors.route) onInvite() else nav.navigate(feature.route) }, radius = 13f,
+                        blurBackdrop = feature.route == Screen.BookFacility.route || feature.route == Screen.InviteVisitors.route) {
                         if (!AppPreferences.useReferenceArtwork) {
                             val index = actions.indexOf(feature)
                             val active = sequence?.activeIndex == index
@@ -271,16 +333,38 @@ private fun ReferenceFeatures(nav: NavController, s: Float) {
 @Composable
 private fun ReferenceGlance(nav: NavController, s: Float) {
     ReferenceGlass(Modifier.fillMaxWidth().height(86.u(s)), s) {
-        ReferenceArt(intArrayOf(62, 1484, 88, 89), Modifier.offset(13.u(s), 11.u(s)).size(44.u(s)).clip(RoundedCornerShape(14.u(s))))
-        Text("Today at a Glance", Modifier.offset(68.u(s), 10.u(s)), color = GateInk, fontFamily = DMSans, fontSize = 13.t(s), fontWeight = FontWeight.Medium)
+        Text("Today at a Glance", Modifier.offset(16.u(s), 10.u(s)), color = GateInk, fontFamily = DMSans, fontSize = 13.t(s), fontWeight = FontWeight.Medium)
         Icon(Icons.Rounded.ChevronRight, "View bookings", Modifier.align(Alignment.TopEnd).padding(end = 10.u(s), top = 8.u(s)).size(23.u(s))
             .clickable(role = Role.Button) { nav.navigate(Screen.Bookings.route) }, tint = GateInk)
-        Row(Modifier.offset(62.u(s), 35.u(s)).fillMaxWidth().padding(end = 68.u(s)), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.offset(10.u(s), 35.u(s)).fillMaxWidth().padding(end = 20.u(s)), verticalAlignment = Alignment.CenterVertically) {
             ReferenceStat("2", "Bookings\nConfirmed", intArrayOf(162, 1531, 70, 77), s, Modifier.weight(1f)) { nav.navigate(Screen.Bookings.route) }
             Box(Modifier.width(.5f.u(s)).height(36.u(s)).background(GateGreen.copy(alpha = .2f)))
             ReferenceStat("1", "Visitor\nExpected", intArrayOf(380, 1530, 72, 78), s, Modifier.weight(1f)) { nav.navigate(Screen.Visitors.route) }
             Box(Modifier.width(.5f.u(s)).height(36.u(s)).background(GateGreen.copy(alpha = .2f)))
             ReferenceStat("3", "New\nAnnouncements", intArrayOf(579, 1530, 76, 78), s, Modifier.weight(1.15f)) { nav.navigate(Screen.Announcements.route) }
+        }
+    }
+}
+
+/** Theme 0's counterpart to Theme 1's "All Announcements" banner. */
+@Composable
+private fun ReferenceAllAnnouncements(s: Float, onClick: () -> Unit) {
+    ReferenceGlass(Modifier.fillMaxWidth().height(76.u(s)), s, onClick) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.u(s)), verticalAlignment = Alignment.CenterVertically) {
+            // Same megaphone as the glance row's "New Announcements".
+            ReferenceArt(intArrayOf(579, 1530, 76, 78), Modifier.size(48.u(s)).clip(CircleShape))
+            Spacer(Modifier.width(12.u(s)))
+            Column(Modifier.weight(1f)) {
+                Text("All Announcements", color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
+                    fontWeight = FontWeight.Medium)
+                Text("Stay updated with the latest community news", color = GateMuted, fontFamily = DMSans,
+                    fontSize = 10.5f.t(s), lineHeight = 13.t(s))
+            }
+            Surface(Modifier.size(30.u(s)), shape = CircleShape, color = Color.White, shadowElevation = 3.u(s)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.u(s)), tint = GateInk)
+                }
+            }
         }
     }
 }

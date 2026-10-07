@@ -98,40 +98,83 @@ internal fun FacilityBookingPanel(
 ) {
     val today = remember { BookingDay.today() }
     var shownMonth by remember { mutableStateOf(BookingDay(today.year, today.month, 1)) }
-    var selectedDay by remember { mutableStateOf<BookingDay?>(null) }
-    var showSlots by remember { mutableStateOf(false) }
+    // Opens on today's slots; the calendar only appears for "Other".
+    var selectedDay by remember { mutableStateOf(today) }
+    var showCalendar by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(24.dp)
-    Box(
+    Column(
         modifier.fillMaxWidth().clip(shape)
             .background(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))))
             .border(1.5.dp, FacilityGlassBorder, shape)
             .padding(16.dp)
     ) {
+        QuickDayChips(selectedDay, otherOpen = showCalendar,
+            onPick = { selectedDay = it; showCalendar = false },
+            onOther = { showCalendar = true })
+        Spacer(Modifier.height(16.dp))
         AnimatedContent(
-            targetState = showSlots,
+            targetState = showCalendar,
             transitionSpec = {
-                val dir = if (targetState) 1 else -1
+                val dir = if (targetState) -1 else 1
                 (slideInHorizontally { it * dir / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 3 } + fadeOut())
             },
             label = "bookingStep"
-        ) { slots ->
-            val day = selectedDay
-            if (slots && day != null) {
-                SlotPicker(facilityName, day, busy, today, maxGuests, glyph, onBack = { showSlots = false },
-                    onBooked = { hour, guests -> onBooked(day, hour, guests) })
-            } else {
+        ) { calendar ->
+            if (calendar) {
                 MonthCalendar(
                     month = shownMonth, today = today, selected = selectedDay,
                     onMonthChange = { shownMonth = it },
-                    onSelect = { selectedDay = it; showSlots = true }
+                    onSelect = { selectedDay = it; showCalendar = false }
                 )
+            } else {
+                val day = selectedDay
+                SlotPicker(facilityName, day, busy, today, maxGuests, glyph,
+                    onBooked = { hour, guests -> onBooked(day, hour, guests) })
             }
         }
     }
 }
 
+private fun tomorrow() = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 1) }.toDay()
+
+/**
+ * Today and Tomorrow as one-tap chips, plus "Other" for any later date. Other is highlighted while
+ * [otherOpen] (its calendar is showing) or when [selected] is neither today nor tomorrow.
+ */
 @Composable
-private fun MonthCalendar(
+internal fun QuickDayChips(selected: BookingDay, otherOpen: Boolean, onPick: (BookingDay) -> Unit, onOther: () -> Unit) {
+    val today = BookingDay.today()
+    val tomorrow = tomorrow()
+    val otherSelected = otherOpen || (selected != today && selected != tomorrow)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DayChip("Today", today.chipLabel(), !otherSelected && selected == today, Modifier.weight(1f)) { onPick(today) }
+        DayChip("Tomorrow", tomorrow.chipLabel(), !otherSelected && selected == tomorrow, Modifier.weight(1f)) { onPick(tomorrow) }
+        DayChip("Other", if (otherSelected && !otherOpen) selected.chipLabel() else "Pick a date", otherSelected,
+            Modifier.weight(1f), onOther)
+    }
+}
+
+/** e.g. "12 May · Sun". */
+private fun BookingDay.chipLabel() = "${shortLabel()} · ${WeekdayNames[toCalendar().get(Calendar.DAY_OF_WEEK) - 1].take(3)}"
+
+@Composable
+private fun DayChip(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.height(58.dp).clip(shape)
+            .background(if (selected) Color(0xFFDDF5EC) else Color.White)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) Color(0xFF3FB58E) else Color(0xFFE3ECE9), shape)
+            .clickable(role = Role.RadioButton, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Text(title, fontFamily = DMSans, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = FacilityInk, maxLines = 1)
+        Text(subtitle, fontFamily = DMSans, fontSize = 11.sp, color = FacilityMuted, maxLines = 1)
+    }
+}
+
+@Composable
+internal fun MonthCalendar(
     month: BookingDay, today: BookingDay, selected: BookingDay?,
     onMonthChange: (BookingDay) -> Unit, onSelect: (BookingDay) -> Unit
 ) {
@@ -227,20 +270,14 @@ private fun DayCell(
 @Composable
 private fun SlotPicker(
     facilityName: String, day: BookingDay, busy: Boolean, today: BookingDay, maxGuests: Int,
-    glyph: @Composable () -> Unit, onBack: () -> Unit, onBooked: (hour: Int, guests: Int) -> Unit
+    glyph: @Composable () -> Unit, onBooked: (hour: Int, guests: Int) -> Unit
 ) {
     var selectedHour by remember(day) { mutableStateOf<Int?>(null) }
     var guests by remember { mutableIntStateOf(1) }
     val nowHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MonthArrow(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Back to calendar", true, onBack)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(day.label(), fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text("Choose a time slot", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-            }
-        }
+        Text(day.longLabel(), fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+        Text("Choose a time slot", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LegendDot(FacilityGreen, "Selected")

@@ -3,7 +3,9 @@ package com.example.greengate
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,10 +20,13 @@ import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,7 +39,7 @@ private val InfoGreen: Color @Composable get() = MaterialTheme.colorScheme.prima
 private val InfoCream: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
 
 private class CommunityDocument(val title: String, val detail: String)
-private class CommunityContact(val role: String, val name: String, val phone: String, val email: String)
+internal class CommunityContact(val role: String, val name: String, val phone: String, val email: String)
 
 private val CommunityDocuments = listOf(
     CommunityDocument("House Rules & By-Laws", "PDF · Updated Aug 2026"),
@@ -46,9 +51,13 @@ private val CommunityDocuments = listOf(
     CommunityDocument("AGM Minutes 2026", "PDF · Updated Sep 2026")
 )
 
+// Also used by the SOS screen's management and security buttons.
+internal val ManagementOffice = CommunityContact("Management Office", "Marina Bay Management", "+65 6123 4500", "office@marinabayresidences.sg")
+internal val SecurityGuardhouse = CommunityContact("Security Guardhouse (24/7)", "Main Gate", "+65 6123 4511", "security@marinabayresidences.sg")
+
 private val CommunityContacts = listOf(
-    CommunityContact("Management Office", "Marina Bay Management", "+65 6123 4500", "office@marinabayresidences.sg"),
-    CommunityContact("Security Guardhouse (24/7)", "Main Gate", "+65 6123 4511", "security@marinabayresidences.sg"),
+    ManagementOffice,
+    SecurityGuardhouse,
     CommunityContact("Maintenance & Repairs", "Facilities Team", "+65 6123 4522", "maintenance@marinabayresidences.sg"),
     CommunityContact("Condo Manager", "Sarah Lim", "+65 9123 4567", "sarah.lim@marinabayresidences.sg")
 )
@@ -67,6 +76,9 @@ fun CommunityInfoScreen(navController: NavController) {
             }
             Spacer(Modifier.height(16.dp))
             AboutCard()
+            Spacer(Modifier.height(24.dp))
+            SectionLabel("AMENITIES")
+            AmenityGallery { navController.navigate(Screen.BookFacility.route) }
             Spacer(Modifier.height(24.dp))
             SectionLabel("DOCUMENT HUB")
             InfoCard {
@@ -99,6 +111,9 @@ fun CommunityInfoScreen(navController: NavController) {
 @Composable
 private fun AboutCard() {
     InfoCard {
+        // Cropped to the waterfront clubhouse and skyline from the home background.
+        Image(painterResource(R.drawable.gg_home_background), "Marina Bay Residences waterfront",
+            Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Crop, alignment = BiasAlignment(.3f, .1f))
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconBadge(Icons.Rounded.Apartment)
@@ -120,6 +135,25 @@ private fun AboutCard() {
                 Fact("Towers", "2")
                 Fact("Units", "428")
                 Fact("Completed", "2015")
+            }
+        }
+    }
+}
+
+/** Photo strip of the bookable facilities; any tap opens Book Facility. */
+@Composable
+private fun AmenityGallery(onClick: () -> Unit) {
+    // Vertical padding keeps the card shadows from being clipped by the scroll container.
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Facilities.forEach { facility ->
+            Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = InfoCream, shadowElevation = 2.dp,
+                modifier = Modifier.width(150.dp)) {
+                Column {
+                    Image(painterResource(facility.photo), null, Modifier.fillMaxWidth().height(100.dp),
+                        contentScale = ContentScale.Crop)
+                    Text(facility.name, Modifier.padding(horizontal = 12.dp, vertical = 10.dp), fontFamily = DMSans,
+                        fontSize = 14.sp, fontWeight = FontWeight.Medium, color = InfoInk, maxLines = 1)
+                }
             }
         }
     }
