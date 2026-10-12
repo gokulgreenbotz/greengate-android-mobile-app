@@ -144,7 +144,7 @@ internal fun SosScreen(onDismiss: () -> Unit, onCallReceiverHarness: () -> Unit)
                         .clickable(remember { MutableInteractionSource() }, indication = null) {}
                         .navigationBarsPadding()
                 ) {
-                    SheetHeader(Modifier.draggable(
+                    SheetHeader(onCallReceiverHarness = { close(onCallReceiverHarness) }, modifier = Modifier.draggable(
                         rememberDraggableState { delta -> scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) } },
                         Orientation.Vertical,
                         onDragStopped = { velocity ->
@@ -170,9 +170,6 @@ internal fun SosScreen(onDismiss: () -> Unit, onCallReceiverHarness: () -> Unit)
                         ) {
                             Text("Close", fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Medium)
                         }
-                        TextButton(onClick = { close(onCallReceiverHarness) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                            Text("Call Receiver Harness", color = SosGreen)
-                        }
                     }
                 }
             }
@@ -181,14 +178,17 @@ internal fun SosScreen(onDismiss: () -> Unit, onCallReceiverHarness: () -> Unit)
 }
 
 @Composable
-private fun SheetHeader(modifier: Modifier) {
+private fun SheetHeader(onCallReceiverHarness: () -> Unit, modifier: Modifier) {
     Column(modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.padding(top = 10.dp).size(36.dp, 4.dp).background(SosHandle, CircleShape))
         Image(painterResource(R.drawable.sos_siren), null, Modifier.padding(top = 20.dp).size(84.dp, 66.dp))
         Text("Call for Help", Modifier.padding(top = 10.dp), fontFamily = DMSans, fontSize = 28.sp,
             fontWeight = FontWeight.Bold, color = SosInk)
-        Text("Quickly contact emergency services or\nbuilding support.", Modifier.padding(top = 6.dp, bottom = 18.dp),
+        Text("Quickly contact emergency services or\nbuilding support.", Modifier.padding(top = 6.dp),
             fontFamily = DMSans, fontSize = 15.sp, lineHeight = 21.sp, color = SosMuted, textAlign = TextAlign.Center)
+        TextButton(onClick = onCallReceiverHarness, modifier = Modifier.padding(bottom = 8.dp)) {
+            Text("Call Receiver Harness", color = SosGreen)
+        }
     }
 }
 
