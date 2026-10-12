@@ -27,10 +27,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,10 +49,10 @@ import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
 import java.util.Calendar
 
+// Fields come from InviteFields.kt; these style the tabs and chips around them.
 private val CabFieldShape = RoundedCornerShape(14.dp)
-private val CabFieldBorder = Color(0xFFE3ECE9)
+private val CabFieldBorder = InviteFieldBorder
 private val CabSelectedFill = Color(0xFFE7F6F0)
-private val CabErrorRed = Color(0xFFC2412D)
 
 // TODO: replace the logos cut from the mock-up with the companies' official artwork.
 private enum class CabCompany(val label: String, @DrawableRes val logo: Int?) {
@@ -164,33 +161,28 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
         }
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
             if (!frequent) {
-                CabLabel("Invite for")
+                InviteLabel("Invite for")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DirectionChip("Pickup", Icons.Rounded.ArrowUpward, pickup, Modifier.weight(1f)) { pickup = true }
                     DirectionChip("Drop", Icons.Rounded.ArrowDownward, !pickup, Modifier.weight(1f)) { pickup = false }
                 }
-                CabLabel("Date")
-                CabField(Icons.Outlined.CalendarMonth, onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight, height = 60.dp) {
-                    Column {
-                        Text(quickDayName(day) ?: day.label(), fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-                        Text("${day.label()} ${day.year}", fontFamily = DMSans, fontSize = 12.sp, color = FacilityMuted)
-                    }
-                }
+                InviteLabel("Date")
+                InviteDateField(day) { pickDate = true }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) {
-                        CabLabel("Start Time")
-                        CabDropdown(Icons.Outlined.Schedule, clockLabel(startMinutes), startTimes.map { clockLabel(it) }) {
+                        InviteLabel("Start Time")
+                        InviteDropdown(Icons.Outlined.Schedule, clockLabel(startMinutes), startTimes.map { clockLabel(it) }) {
                             startMinutes = startTimes[it]
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        CabLabel("Valid for next")
-                        CabDropdown(Icons.Outlined.Schedule, ValidForOptions.first { it.first == validHours }.second,
+                        InviteLabel("Valid for next")
+                        InviteDropdown(Icons.Outlined.Schedule, ValidForOptions.first { it.first == validHours }.second,
                             ValidForOptions.map { it.second }) { validHours = ValidForOptions[it].first }
                     }
                 }
             } else {
-                CabLabel("Select Days of Week")
+                InviteLabel("Select Days of Week")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     WeekDays.forEachIndexed { i, name ->
                         val selected = i in days
@@ -205,28 +197,28 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                         }
                     }
                 }
-                CabError(daysError)
-                CabLabel("Select Validity")
-                CabDropdown(Icons.Outlined.CalendarMonth, validity, ValidityOptions) { validity = ValidityOptions[it] }
-                CabLabel("Select Time Slot")
+                InviteError(daysError)
+                InviteLabel("Select Validity")
+                InviteDropdown(Icons.Outlined.CalendarMonth, validity, ValidityOptions) { validity = ValidityOptions[it] }
+                InviteLabel("Select Time Slot")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CabDropdown(Icons.Outlined.Schedule, clockLabel(slotStart), SlotStarts.map { clockLabel(it) }, Modifier.weight(1f)) {
+                    InviteDropdown(Icons.Outlined.Schedule, clockLabel(slotStart), SlotStarts.map { clockLabel(it) }, Modifier.weight(1f)) {
                         slotStart = SlotStarts[it]
                     }
-                    CabDropdown(Icons.Outlined.Schedule, clockLabel(slotEnd), SlotEnds.map { clockLabel(it) }, Modifier.weight(1f)) {
+                    InviteDropdown(Icons.Outlined.Schedule, clockLabel(slotEnd), SlotEnds.map { clockLabel(it) }, Modifier.weight(1f)) {
                         slotEnd = SlotEnds[it]
                     }
                 }
-                CabError(slotError)
-                CabLabel("Select Entries Per Day")
-                CabDropdown(Icons.Rounded.Repeat, entries.second, EntriesPerDay.map { it.second }) { entries = EntriesPerDay[it] }
+                InviteError(slotError)
+                InviteLabel("Select Entries Per Day")
+                InviteDropdown(Icons.Rounded.Repeat, entries.second, EntriesPerDay.map { it.second }) { entries = EntriesPerDay[it] }
             }
 
             Row(Modifier.padding(top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Vehicle Number", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
                 Icon(Icons.Outlined.Info, null, Modifier.padding(start = 6.dp).size(16.dp), tint = FacilityMuted)
             }
-            CabField(Icons.Outlined.DirectionsCar) {
+            InviteField(Icons.Outlined.DirectionsCar) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
                     if (vehicle.isEmpty()) Text("SMC 1234 A", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
                     BasicTextField(
@@ -244,8 +236,8 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
             Text("Singapore vehicle format (e.g. SMC 1234 A). Format can be configured later.",
                 Modifier.padding(top = 6.dp, start = 2.dp), fontFamily = DMSans, fontSize = 11.sp, lineHeight = 15.sp, color = FacilityMuted)
 
-            CabLabel("Company Name")
-            CabDropdown(Icons.Outlined.DirectionsCar, company.label, CabCompany.entries.map { it.label }) { company = CabCompany.entries[it] }
+            InviteLabel("Company Name")
+            InviteDropdown(Icons.Outlined.DirectionsCar, company.label, CabCompany.entries.map { it.label }) { company = CabCompany.entries[it] }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 CabCompany.entries.filter { it.logo != null }.forEach { co ->
@@ -275,8 +267,8 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                             uncheckedTrackColor = Color(0xFFDCE3E1), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color(0xFFDCE3E1)
                         ))
                     }
-                    CabLabel("Notes (Optional)")
-                    CabField(null) {
+                    InviteLabel("Notes (Optional)")
+                    InviteField(null) {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
                             if (note.isEmpty()) Text("e.g. pick up at the lobby", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
                             BasicTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), singleLine = true,
@@ -290,63 +282,6 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
             Spacer(Modifier.height(16.dp))
         }
         InviteFormButton("Create Invite") { create() }
-    }
-}
-
-private fun quickDayName(day: BookingDay) = when (day) {
-    BookingDay.today() -> "Today"
-    dayFromToday(1) -> "Tomorrow"
-    else -> null
-}
-
-@Composable
-private fun CabLabel(text: String) {
-    Text(text, Modifier.padding(top = 16.dp, bottom = 8.dp), fontFamily = DMSans, fontSize = 14.sp,
-        fontWeight = FontWeight.Medium, color = FacilityInk)
-}
-
-@Composable
-private fun CabError(text: String?) {
-    if (text != null) Text(text, Modifier.padding(start = 2.dp, top = 6.dp), fontFamily = DMSans, fontSize = 12.sp, color = CabErrorRed)
-}
-
-@Composable
-private fun CabField(
-    icon: ImageVector?, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, trailing: ImageVector? = null,
-    height: androidx.compose.ui.unit.Dp = 52.dp, content: @Composable () -> Unit,
-) {
-    Row(
-        modifier.fillMaxWidth().height(height).clip(CabFieldShape).background(Color.White)
-            .border(1.dp, CabFieldBorder, CabFieldShape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = BookingsDeepGreen, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-        }
-        Box(Modifier.weight(1f)) { content() }
-        if (trailing != null) Icon(trailing, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
-    }
-}
-
-@Composable
-private fun CabDropdown(icon: ImageVector, value: String, options: List<String>, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box(modifier) {
-        CabField(icon, onClick = { open = true }, trailing = Icons.Rounded.KeyboardArrowDown) {
-            Text(value, fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk, maxLines = 1)
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White,
-            modifier = Modifier.heightIn(max = 320.dp)) {
-            options.forEachIndexed { i, option ->
-                DropdownMenuItem(
-                    text = { Text(option, fontFamily = DMSans, fontWeight = if (option == value) FontWeight.SemiBold else FontWeight.Normal) },
-                    onClick = { onSelect(i); open = false }
-                )
-            }
-        }
     }
 }
 

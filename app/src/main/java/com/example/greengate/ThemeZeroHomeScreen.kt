@@ -276,7 +276,7 @@ private fun ReferenceAnnouncement(s: Float, onClick: () -> Unit) {
 private data class ReferenceFeature(val title: String, val subtitle: String, val route: String, val art: IntArray)
 private val ReferenceActions = listOf(
     ReferenceFeature("Book Facility", "Reserve amenities\nwith ease", Screen.BookFacility.route, intArrayOf(105, 940, 185, 138)),
-    ReferenceFeature("Invite Visitors", "Create visitor\npasses quickly", Screen.InviteVisitors.route, intArrayOf(538, 940, 163, 139)),
+    ReferenceFeature("Pre-Invites", "Create visitor\npasses quickly", Screen.InviteVisitors.route, intArrayOf(538, 940, 163, 139)),
     ReferenceFeature("E-Forms", "Submit and manage\ndigital forms", Screen.EForms.route, intArrayOf(136, 1207, 168, 141)),
     ReferenceFeature("My Community", "Connect, share\nand stay updated", Screen.Community.route, intArrayOf(510, 1207, 178, 143))
 )

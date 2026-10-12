@@ -94,9 +94,11 @@ internal fun CreateInviteSheet(
     }
 }
 
-/** Top of an invite form in the sheet, laid out like Invite Cab's; [onBack] adds a back arrow. */
+/** Top of an invite form in the sheet, laid out like Invite Cab's; [onBack] adds a back arrow, a null title, subtitle or art is left out. */
 @Composable
-internal fun InviteFormHeader(title: String, subtitle: String, onBack: (() -> Unit)?, onClose: () -> Unit, art: @Composable () -> Unit) {
+internal fun InviteFormHeader(
+    title: String?, subtitle: String?, onBack: (() -> Unit)?, onClose: () -> Unit, art: (@Composable () -> Unit)?,
+) {
     Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack), contentAlignment = Alignment.Center) {
@@ -104,11 +106,13 @@ internal fun InviteFormHeader(title: String, subtitle: String, onBack: (() -> Un
             }
             Spacer(Modifier.width(4.dp))
         }
-        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { art() }
-        Spacer(Modifier.width(12.dp))
+        if (art != null) {
+            Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) { art() }
+            Spacer(Modifier.width(12.dp))
+        }
         Column(Modifier.weight(1f)) {
-            Text(title, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-            Text(subtitle, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+            if (title != null) Text(title, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+            if (subtitle != null) Text(subtitle, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
         }
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))

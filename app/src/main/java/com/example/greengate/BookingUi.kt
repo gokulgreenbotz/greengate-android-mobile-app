@@ -1,5 +1,13 @@
 package com.example.greengate
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +20,11 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,10 +35,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
+import kotlinx.coroutines.delay
 
 // Shared by My Bookings, Booking Details, Payments & Deposits and Transaction Details.
 internal val BookingsBackdrop = Brush.verticalGradient(
@@ -58,11 +75,14 @@ internal fun StatusPill(tone: StatusTone, small: Boolean = false) {
 
 @Composable
 internal fun GlassTopBar(title: String, onBack: () -> Unit, action: (@Composable () -> Unit)? = null) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.align(Alignment.CenterStart), onBack)
-        Text(title, Modifier.align(Alignment.Center), fontFamily = DMSans, fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold, color = FacilityInk)
-        if (action != null) Box(Modifier.align(Alignment.CenterEnd)) { action() }
+    // A row rather than a centred box, so the title makes room for a widening action such as a FoldingLabelButton.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
+        Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), textAlign = TextAlign.Center,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+        // Without an action, an empty space as wide as Back keeps the title centred.
+        if (action != null) action() else Spacer(Modifier.size(48.dp))
     }
 }
 
@@ -77,6 +97,45 @@ internal fun GlassIconButton(icon: ImageVector, description: String, modifier: M
         Icon(icon, description, tint = FacilityInk, modifier = Modifier.size(22.dp))
     }
 }
+
+/**
+ * A round glass icon button that first opens as a pill with [label] beside the icon, then folds the
+ * label away after a few seconds. Shows once per visit: coming back to the screen keeps it folded.
+ */
+@Composable
+internal fun FoldingLabelButton(
+    icon: ImageVector, label: String, size: Dp = 48.dp, iconSize: Dp = 22.dp,
+    ambientShadow: Color = Color(0x22000000), spotShadow: Color = Color(0x22000000), onClick: () -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        if (!expanded) return@LaunchedEffect
+        delay(FoldingLabelMillis)
+        expanded = false
+    }
+    Row(
+        Modifier.height(size).shadow(6.dp, CircleShape, ambientColor = ambientShadow, spotColor = spotShadow)
+            .clip(CircleShape).background(Color(0xF2FFFFFF))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = (size - iconSize) / 2),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, if (expanded) null else label, tint = FacilityInk, modifier = Modifier.size(iconSize))
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandHorizontally(FoldingLabelSpring, expandFrom = Alignment.Start) + fadeIn(),
+            // The label fades out ahead of the shrink, so it never looks cut off by the closing edge.
+            exit = shrinkHorizontally(FoldingLabelSpring, shrinkTowards = Alignment.Start) + fadeOut(tween(180))
+        ) {
+            Text(label, Modifier.padding(start = 8.dp, end = 4.dp), maxLines = 1,
+                fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+        }
+    }
+}
+
+private val FoldingLabelSpring = spring<IntSize>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+// Long enough to read past the 380 ms slide-in.
+private const val FoldingLabelMillis = 2500L
 
 @Composable
 internal fun GlassCard(

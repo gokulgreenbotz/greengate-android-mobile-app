@@ -25,11 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -189,6 +189,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     fun goBack() {
         pendingSpokenReply = null
         voice.cancel()
+        focusManager.clearFocus()
         navController.popBackStack()
     }
     BackHandler(enabled = voiceAllowed, onBack = ::goBack)
@@ -199,7 +200,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         BotTopBar(
-            onBack = ::goBack,
+            onClose = ::goBack,
             canReset = questions.isNotEmpty(),
             onReset = {
                 voice.cancel()
@@ -293,7 +294,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
 }
 
 @Composable
-private fun BotTopBar(onBack: () -> Unit, canReset: Boolean, onReset: () -> Unit) {
+private fun BotTopBar(onClose: () -> Unit, canReset: Boolean, onReset: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val buttonModifier = Modifier.size(48.dp)
         .shadow(4.dp, CircleShape, ambientColor = colors.primary.copy(alpha = .10f),
@@ -302,14 +303,14 @@ private fun BotTopBar(onBack: () -> Unit, canReset: Boolean, onReset: () -> Unit
         .border(1.dp, Color.White.copy(alpha = .8f), CircleShape)
     Row(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack, modifier = buttonModifier) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = colors.onSurface)
-        }
-        Text("Green Bot", Modifier.weight(1f), fontFamily = DMSans, fontWeight = FontWeight.SemiBold,
-            fontSize = 22.sp, textAlign = TextAlign.Center, color = colors.onSurface)
         IconButton(onClick = onReset, enabled = canReset, modifier = buttonModifier) {
             Icon(Icons.Outlined.RestartAlt, "Start a new chat",
                 tint = BotSecondaryText.copy(alpha = if (canReset) 1f else .35f))
+        }
+        Text("Green Bot", Modifier.weight(1f), fontFamily = DMSans, fontWeight = FontWeight.SemiBold,
+            fontSize = 22.sp, textAlign = TextAlign.Center, color = colors.onSurface)
+        IconButton(onClick = onClose, modifier = buttonModifier) {
+            Icon(Icons.Rounded.Close, "Close Green Bot", tint = colors.onSurface)
         }
     }
 }

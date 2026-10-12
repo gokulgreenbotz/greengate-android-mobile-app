@@ -46,12 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -102,9 +102,9 @@ internal val Facilities = listOf(
 )
 
 /**
- * The facility photos and artwork are multi-megabyte PNGs. Decoding them with painterResource
- * happens on the main thread in the screen's first frame and stalls the slide-in, so they are
- * decoded here in the background, scaled to what the screen can show, and kept for reuse.
+ * The facility artwork is multi-megabyte PNGs. Decoding it with painterResource happens on the
+ * main thread in the screen's first frame and stalls the slide-in, so it is decoded here in the
+ * background, scaled to what the screen can show, and kept for reuse.
  */
 internal object FacilityImages {
     private val cache = mutableStateMapOf<Int, ImageBitmap>()
@@ -115,11 +115,10 @@ internal object FacilityImages {
     /** Safe to call repeatedly; images already decoded are skipped. */
     suspend fun preload(context: Context) = loading.withLock {
         val res = context.resources
-        val photoWidth = res.displayMetrics.widthPixels
         val artworkWidth = (76 * res.displayMetrics.density).toInt()
-        Facilities.flatMap { listOf(it.photo to photoWidth, it.artwork to artworkWidth) }
-            .filter { (id, _) -> id !in cache }
-            .forEach { (id, width) -> cache[id] = withContext(Dispatchers.Default) { decode(res, id, width) } }
+        Facilities.map { it.artwork }
+            .filter { it !in cache }
+            .forEach { id -> cache[id] = withContext(Dispatchers.Default) { decode(res, id, artworkWidth) } }
     }
 
     private fun decode(res: Resources, @DrawableRes id: Int, maxWidth: Int): ImageBitmap {
@@ -133,9 +132,9 @@ internal object FacilityImages {
 }
 
 @Composable
-private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
+private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier) {
     val bitmap = FacilityImages[id]
-    if (bitmap != null) Image(bitmap, null, modifier, contentScale = contentScale)
+    if (bitmap != null) Image(bitmap, null, modifier)
     else Box(modifier)
 }
 
@@ -210,13 +209,16 @@ fun BookFacilityScreen(navController: NavController) {
 
 @Composable
 private fun FacilityHeader(onBack: () -> Unit, onCalendar: () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        GlassCircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.align(Alignment.CenterStart), onBack)
+    // A row rather than a centred box, so the title makes room as the History pill grows on small phones.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        GlassCircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier, onBack)
         Text(
-            "Book Facility", Modifier.align(Alignment.Center),
+            "Book Facility", Modifier.weight(1f).padding(horizontal = 8.dp), textAlign = TextAlign.Center, maxLines = 1,
             fontFamily = DMSans, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White
         )
-        GlassCircleButton(Icons.Rounded.CalendarMonth, "My bookings", Modifier.align(Alignment.CenterEnd), onCalendar)
+        // Sized and shadowed to match Back on this screen.
+        FoldingLabelButton(Icons.Rounded.CalendarMonth, "History", size = 52.dp, iconSize = 24.dp,
+            ambientShadow = Color(0x33000000), spotShadow = Color.Black, onClick = onCalendar)
     }
 }
 
@@ -259,13 +261,14 @@ private fun FacilityCard(facility: Facility, expanded: Boolean, onAbout: () -> U
         shape = shape, color = Color(0x99FFFFFF), border = BorderStroke(1.5.dp, FacilityGlassBorder),
         shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
     ) {
-        Box {
-            FacilityImage(facility.photo, Modifier.fillMaxWidth().height(150.dp).background(Color(0x332B6F80)), ContentScale.Crop)
-            AvailabilityBadge(facility.slotsLeft, Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 12.dp))
-            AboutChip(facility.name, Modifier.align(Alignment.TopStart).padding(top = 12.dp, start = 12.dp), onAbout)
-            // The info panel overlaps the photo's lower edge like a frosted sheet.
+        Column(Modifier.padding(10.dp)) {
+            Row(Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                AboutChip(facility.name, Modifier, onAbout)
+                Spacer(Modifier.weight(1f))
+                AvailabilityBadge(facility.slotsLeft, Modifier)
+            }
             Row(
-                Modifier.padding(start = 10.dp, end = 10.dp, top = 126.dp, bottom = 10.dp).fillMaxWidth()
+                Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp)).background(FacilityGlass)
                     .border(1.dp, FacilityGlassBorder, RoundedCornerShape(20.dp))
                     .padding(10.dp),

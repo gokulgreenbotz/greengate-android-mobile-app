@@ -43,7 +43,7 @@ internal fun MyBookingsScreen(navController: NavController) {
     Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar("My Bookings", onBack = { navController.popBackStack() }) {
-                GlassIconButton(Icons.Outlined.ReceiptLong, "Payments and deposits") {
+                FoldingLabelButton(Icons.Outlined.ReceiptLong, "Payments") {
                     navController.navigate(Screen.Payments.route)
                 }
             }

@@ -16,19 +16,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Timer
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,15 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,15 +53,11 @@ private enum class DeliveryPartner(val label: String, @DrawableRes val logo: Int
 
 private enum class DeliveryPage { FORM, SUMMARY }
 
-private val DeliveryCountryCodes = listOf("+65", "+60", "+62", "+63", "+66", "+91", "+44", "+1")
 private val DeliveryValidFor = listOf(1 to "1 hour", 2 to "2 hours", 3 to "3 hours", 4 to "4 hours")
 
-private val DeliveryBoxShape = RoundedCornerShape(12.dp)
-// Text inputs match the Family / Friend form's InputField.
-private val DeliveryInputShape = RoundedCornerShape(16.dp)
-private val DeliveryBorder = Color(0xFFE3ECE9)
+// Fields come from InviteFields.kt; these style the partner chips and summary.
+private val DeliveryBorder = InviteFieldBorder
 private val DeliverySelectedFill = Color(0xFFE7F6F0)
-private val DeliveryErrorRed = Color(0xFFC2412D)
 
 // Half hours across the day, in minutes after midnight.
 private val DeliverySlots = (0..47).map { it * 30 }
@@ -83,12 +69,6 @@ private fun deliveryStartTimes(day: BookingDay): List<Int> {
     return listOf(now) + DeliverySlots.filter { it > now }
 }
 
-private fun deliveryDayName(day: BookingDay) = when (day) {
-    BookingDay.today() -> "Today"
-    dayFromToday(1) -> "Tomorrow"
-    else -> "${day.label()} ${day.year}"
-}
-
 /**
  * Delivery invite, shown in place of the visitor types inside the Create Invite sheet: partner and
  * rider details, then a summary before the invite is created. [onBack] returns to the types.
@@ -97,7 +77,7 @@ private fun deliveryDayName(day: BookingDay) = when (day) {
 internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated: (VisitorInvite) -> Unit) {
     var partner by rememberSaveable { mutableStateOf(DeliveryPartner.GRABFOOD) }
     var name by rememberSaveable { mutableStateOf("") }
-    var countryCode by rememberSaveable { mutableStateOf(DeliveryCountryCodes.first()) }
+    var countryCode by rememberSaveable { mutableStateOf(InviteCountryCodes.first()) }
     var mobile by rememberSaveable { mutableStateOf("") }
     var dayKey by rememberSaveable { mutableStateOf(BookingDay.today().let { listOf(it.year, it.month, it.day) }) }
     val day = BookingDay(dayKey[0], dayKey[1], dayKey[2])
@@ -128,7 +108,7 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
         pickDate = false
     }
 
-    Column(Modifier.fillMaxWidth().imePadding()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         InviteFormHeader(
             if (page == DeliveryPage.FORM) "Delivery Invite" else "Invite Summary",
             if (page == DeliveryPage.FORM) "Create an invite for a food, parcel or courier drop" else "Check the details before creating it",
@@ -144,48 +124,44 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
                 val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
                 (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
             },
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f),
             label = "deliveryPage"
         ) { shown ->
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
                 if (shown == DeliveryPage.SUMMARY) DeliverySummary(draft(), partner)
                 else {
-                    Text("Delivery Partner", Modifier.padding(top = 8.dp), fontFamily = DMSans, fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold, color = FacilityInk)
-                    Text("Select the delivery partner", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-                    Spacer(Modifier.height(12.dp))
-                    DeliveryPartner.entries.chunked(3).forEach { row ->
-                        Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            row.forEach { p -> PartnerChip(p, p == partner, Modifier.weight(1f)) { partner = p } }
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    GlassCard(padding = 14.dp) {
-                        DetailRow(Icons.Outlined.Person, "Name") {
-                            InputField(name, { name = it.take(60) }, "e.g. Ahmad", nameError,
-                                KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
-                        }
-                        DetailRow(Icons.Outlined.Phone, "Mobile") {
-                            MobileField(countryCode, { countryCode = it }, mobile,
-                                { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError)
-                        }
-                        DetailRow(Icons.Outlined.CalendarMonth, "Date") {
-                            ValueBox(onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight) {
-                                Text(deliveryDayName(day), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk, maxLines = 1)
+                    InviteLabel("Delivery Partner")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DeliveryPartner.entries.chunked(3).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                row.forEach { p -> PartnerChip(p, p == partner, Modifier.weight(1f)) { partner = p } }
                             }
                         }
-                        DetailRow(Icons.Outlined.Schedule, "Time") {
-                            ValueDropdown(clockLabel(startMinutes), startTimes.map { clockLabel(it) }) { startMinutes = startTimes[it] }
+                    }
+                    InviteLabel("Name")
+                    InviteTextField(Icons.Outlined.Person, name, { name = it.take(60) }, "e.g. Ahmad", nameError,
+                        KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
+                    InviteLabel("Mobile Number")
+                    InviteMobileField(countryCode, { countryCode = it }, mobile,
+                        { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError)
+                    InviteLabel("Date")
+                    InviteDateField(day) { pickDate = true }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            InviteLabel("Start Time")
+                            InviteDropdown(Icons.Outlined.Schedule, clockLabel(startMinutes), startTimes.map { clockLabel(it) }) {
+                                startMinutes = startTimes[it]
+                            }
                         }
-                        DetailRow(Icons.Outlined.Timer, "Valid for") {
-                            ValueDropdown(DeliveryValidFor.first { it.first == validHours }.second,
+                        Column(Modifier.weight(1f)) {
+                            InviteLabel("Valid for")
+                            InviteDropdown(Icons.Outlined.Schedule, DeliveryValidFor.first { it.first == validHours }.second,
                                 DeliveryValidFor.map { it.second }) { validHours = DeliveryValidFor[it].first }
                         }
-                        DetailRow(Icons.Outlined.Description, "Remarks", optional = true, last = true) {
-                            InputField(remarks, { remarks = it.take(120) }, "e.g. Food, Parcel", null,
-                                KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
-                        }
                     }
+                    InviteLabel("Remarks (Optional)")
+                    InviteTextField(Icons.Outlined.Description, remarks, { remarks = it.take(120) }, "e.g. Food, Parcel", null,
+                        KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -247,109 +223,17 @@ private fun PartnerLogo(partner: DeliveryPartner, size: androidx.compose.ui.unit
 
 @Composable
 private fun PartnerChip(partner: DeliveryPartner, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    // Sized like Invite Cab's company chips.
+    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier.height(80.dp).clip(shape)
+        modifier.height(70.dp).clip(shape)
             .background(if (selected) DeliverySelectedFill else Color.White)
             .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else DeliveryBorder, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
-        PartnerLogo(partner, 28.dp)
-        Spacer(Modifier.height(8.dp))
-        Text(partner.label, fontFamily = DMSans, fontSize = 13.sp, color = FacilityInk, maxLines = 1)
-    }
-}
-
-/** One line of the details card: icon and label on the left, the value control on the right. */
-@Composable
-private fun DetailRow(
-    icon: ImageVector, label: String, optional: Boolean = false, last: Boolean = false,
-    content: @Composable () -> Unit,
-) {
-    Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = BookingsDeepGreen, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(.8f)) {
-            Text(label, fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-            if (optional) Text("(Optional)", fontFamily = DMSans, fontSize = 11.sp, color = FacilityMuted)
-        }
-        Box(Modifier.weight(1.6f)) { content() }
-    }
-    if (!last) HorizontalDivider(color = BookingsDivider)
-}
-
-@Composable
-private fun ValueBox(
-    onClick: (() -> Unit)? = null, trailing: ImageVector? = null, error: Boolean = false, content: @Composable () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().height(46.dp).clip(DeliveryBoxShape).background(Color.White)
-            .border(if (error) 1.5.dp else 1.dp, if (error) DeliveryErrorRed else DeliveryBorder, DeliveryBoxShape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { content() }
-        if (trailing != null) Icon(trailing, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
-    }
-}
-
-/** Country code and number in one box, styled like the Family / Friend form's [InputField]. */
-@Composable
-private fun MobileField(code: String, onCode: (String) -> Unit, mobile: String, onMobile: (String) -> Unit, error: String?) {
-    var open by remember { mutableStateOf(false) }
-    Column {
-        Row(
-            Modifier.fillMaxWidth().height(54.dp).clip(DeliveryInputShape).background(Color.White)
-                .border(if (error != null) 1.5.dp else 1.dp, if (error != null) DeliveryErrorRed else DeliveryBorder, DeliveryInputShape)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box {
-                Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable(role = Role.DropdownList) { open = true }.padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(code, fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk)
-                    Icon(Icons.Rounded.KeyboardArrowDown, "Country code", tint = FacilityInk, modifier = Modifier.size(18.dp))
-                }
-                DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White) {
-                    DeliveryCountryCodes.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option, fontFamily = DMSans, fontWeight = if (option == code) FontWeight.SemiBold else FontWeight.Normal) },
-                            onClick = { onCode(option); open = false }
-                        )
-                    }
-                }
-            }
-            Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(22.dp).background(DeliveryBorder))
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (mobile.isEmpty()) Text("8123 4567", fontFamily = DMSans, fontSize = 16.sp, color = FacilityMuted.copy(alpha = .6f), maxLines = 1)
-                BasicTextField(
-                    mobile, onMobile, Modifier.fillMaxWidth(), singleLine = true,
-                    textStyle = TextStyle(fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk),
-                    cursorBrush = SolidColor(BookingsDeepGreen),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next)
-                )
-            }
-        }
-        if (error != null) Text(error, Modifier.padding(start = 4.dp, top = 4.dp), fontFamily = DMSans, fontSize = 12.sp, color = DeliveryErrorRed)
-    }
-}
-
-@Composable
-private fun ValueDropdown(value: String, options: List<String>, onSelect: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ValueBox(onClick = { open = true }, trailing = Icons.Rounded.KeyboardArrowDown) {
-            Text(value, fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk, maxLines = 1)
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White, modifier = Modifier.heightIn(max = 320.dp)) {
-            options.forEachIndexed { i, option ->
-                DropdownMenuItem(
-                    text = { Text(option, fontFamily = DMSans, fontWeight = if (option == value) FontWeight.SemiBold else FontWeight.Normal) },
-                    onClick = { onSelect(i); open = false }
-                )
-            }
-        }
+        PartnerLogo(partner, 26.dp)
+        Spacer(Modifier.height(6.dp))
+        Text(partner.label, fontFamily = DMSans, fontSize = 11.sp, color = FacilityInk, maxLines = 1)
     }
 }
