@@ -145,4 +145,4 @@ internal fun dayHeaderLabel(ms: Long, now: Long = System.currentTimeMillis()): S
     }
 }
 
-internal fun money(amount: Int) = "S$$amount.00"
+internal fun money(amount: Int) = "$$amount.00"

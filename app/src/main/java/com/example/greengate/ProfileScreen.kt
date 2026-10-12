@@ -87,7 +87,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    val useIconSet = AppPreferences.theme == AppTheme.ONE || !AppPreferences.useReferenceArtwork
+                    val useIconSet = AppPreferences.theme != AppTheme.ZERO || !AppPreferences.useReferenceArtwork
                     if (AppPreferences.theme == AppTheme.ZERO) {
                         IconSetOption(
                             title = "Design artwork",
@@ -105,7 +105,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         selected = useIconSet && AppPreferences.iconSet == IconSet.ZERO,
                         onClick = { AppPreferences.setIconSet(context, IconSet.ZERO) }
                     ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp), IconSet.ZERO)
+                        LayeredIconSetZero(0, 0f, false, Modifier.size(40.dp), IconSet.ZERO)
                     }
                     HorizontalDivider(color = Color(0xFFEDEAE0))
                     IconSetOption(
@@ -114,16 +114,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         selected = useIconSet && AppPreferences.iconSet == IconSet.CLAY,
                         onClick = { AppPreferences.setIconSet(context, IconSet.CLAY) }
                     ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp), IconSet.CLAY)
-                    }
-                    HorizontalDivider(color = Color(0xFFEDEAE0))
-                    IconSetOption(
-                        title = "Icon Set 1",
-                        subtitle = "Photo-style illustrated icons",
-                        selected = useIconSet && AppPreferences.iconSet == IconSet.ONE,
-                        onClick = { AppPreferences.setIconSet(context, IconSet.ONE) }
-                    ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp))
+                        LayeredIconSetZero(0, 0f, false, Modifier.size(40.dp), IconSet.CLAY)
                     }
                     HorizontalDivider(color = Color(0xFFEDEAE0))
                     IconSetOption(
@@ -160,6 +151,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         val title = when (theme) {
                             AppTheme.ZERO -> "Theme 0 - Glass"
                             AppTheme.ONE -> "Theme 1 - Classic"
+                            AppTheme.TWO -> "Theme 2 - Fresh"
                         }
                         Row(Modifier.fillMaxWidth().selectable(
                             selected = AppPreferences.theme == theme,

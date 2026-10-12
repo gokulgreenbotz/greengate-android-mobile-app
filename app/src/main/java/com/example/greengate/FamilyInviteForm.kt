@@ -54,7 +54,7 @@ private val ValidityOptions = listOf(1 to "1 Hour", 2 to "2 Hours", 4 to "4 Hour
 
 // Fields come from InviteFields.kt; these style the relationship chips.
 private val ChipShape = RoundedCornerShape(14.dp)
-private val SelectedFill = Color(0xFFE7F6F0)
+private val SelectedFill get() = InviteSelectedFill
 
 private enum class InvitePage { BASIC, OPTIONS, REVIEW }
 
@@ -135,10 +135,7 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
             onClose = onClose,
             // The review page shows the invite's own avatar, so it skips the header art.
             art = if (page == InvitePage.REVIEW) null else ({
-                Box(Modifier.size(60.dp)) {
-                    Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(56.dp))
-                    Image(painterResource(R.drawable.ic_clay_community_heart), null, Modifier.align(Alignment.BottomEnd).size(28.dp))
-                }
+                InviteTypeArt(InviteType.FAMILY, Modifier.requiredSize(72.dp), blend = false)
             }),
         )
         Spacer(Modifier.height(6.dp))

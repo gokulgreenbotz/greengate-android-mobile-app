@@ -152,6 +152,7 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Community : Screen("community")
     data object Access : Screen("access")
+    data object Services : Screen("services")
     data object Profile : Screen("profile")
     data object BookFacility : Screen("book_facility")
     data object FacilityAbout : Screen("facility/{id}") {
@@ -287,6 +288,7 @@ fun MainScreen(
                 screen(Screen.Home.route, underStatusBar = { AppPreferences.theme == AppTheme.ZERO }) { HomeScreen(navController) }
                 screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
                 screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
+                screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
                 screen(Screen.Profile.route) { ProfileScreen(navController, onLogout) }
                 screen(Screen.BookFacility.route, underStatusBar = { true }) { BookFacilityScreen(navController) }
                 screen(Screen.FacilityAbout.route, underStatusBar = { true }) { entry ->
@@ -440,7 +442,7 @@ private fun Bundle?.bookingArgs(): BookingArgs? {
 }
 
 fun isMainTab(route: String?): Boolean {
-    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Access.route, Screen.Profile.route)
+    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Services.route, Screen.Access.route, Screen.Profile.route)
 }
 
 @Composable

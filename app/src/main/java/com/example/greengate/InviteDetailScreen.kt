@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.greengate.ui.theme.BackgroundCream
 import com.example.greengate.ui.theme.DMSans
 
 private enum class InviteTab { DETAILS, ACCESS, HISTORY }
@@ -97,7 +99,7 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(Color(0x99FFFFFF)).padding(4.dp)
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(themed(Color(0x99FFFFFF), BackgroundCream)).padding(4.dp)
                 ) {
                     listOf(
                         InviteTab.DETAILS to "Details",
@@ -133,7 +135,7 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PillButton("Edit", Modifier.weight(1f).height(54.dp),
-                        background = Brush.linearGradient(listOf(Color(0xFFEEF2F1), Color(0xFFE6ECEA)))) {
+                        background = themed(Brush.linearGradient(listOf(Color(0xFFEEF2F1), Color(0xFFE6ECEA))), SolidColor(BackgroundCream))) {
                         // TODO: open the invite form pre-filled once editing is supported by the visitor API.
                         Toast.makeText(context, "Editing invites isn't available yet", Toast.LENGTH_SHORT).show()
                     }
@@ -179,7 +181,7 @@ private fun VehicleApproval(invite: VisitorInvite) {
             ) { Text("Reject", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = BookingsDeepGreen) }
             Box(
                 Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(16.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen)))
+                    .background(greenButton(Color(0xFF1D8A6A)))
                     .clickable(role = Role.Button) { resolve(true) },
                 contentAlignment = Alignment.Center
             ) { Text("Approve", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }

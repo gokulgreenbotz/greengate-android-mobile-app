@@ -27,11 +27,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.OutdoorGrill
 import androidx.compose.material.icons.rounded.Pool
 import androidx.compose.material.icons.rounded.SportsTennis
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
@@ -59,6 +62,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import com.example.greengate.ui.theme.DMSans
+import com.example.greengate.ui.theme.PrimaryGreen
+import com.example.greengate.ui.theme.SoftGreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -66,13 +71,13 @@ import kotlinx.coroutines.withContext
 
 internal val FacilityInk = Color(0xFF14232B)
 internal val FacilityMuted = Color(0xFF5B6B72)
-internal val FacilityGreen = Color(0xFF1E8A6A)
+internal val FacilityGreen get() = themed(Color(0xFF1E8A6A), PrimaryGreen)
 internal val FacilityOrange = Color(0xFFE8772E)
-internal val FacilityGlass = Color(0xD9FFFFFF)
-internal val FacilityGlassBorder = Color(0xB3FFFFFF)
-private val FacilityBackdrop = Brush.verticalGradient(
+internal val FacilityGlassBorder get() = themed(Color(0xB3FFFFFF), ClassicLine)
+private val GlassFacilityBackdrop = Brush.verticalGradient(
     0f to Color(0xFF5E9FB4), 0.18f to Color(0xFF9DCBD3), 0.45f to Color(0xFFD5EDEA), 1f to Color(0xFFEAF6F2)
 )
+private val FacilityBackdrop get() = themed(GlassFacilityBackdrop, ClassicBackdrop)
 
 internal enum class FacilityCategory(val label: String) { ALL("All"), POOL("Pool"), GYM("Gym"), BBQ("BBQ"), TENNIS("Tennis") }
 
@@ -86,7 +91,7 @@ internal data class Facility(
     // 3D artwork; the flat [icon] is used only with Icon Set 3.
     @DrawableRes val artwork: Int,
     val maxPax: Int,
-    // Refundable deposit in whole S$; 0 means none.
+    // Refundable deposit in whole $; 0 means none.
     val deposit: Int,
     val nextAvailable: String,
     // null means plenty of availability; a number shows the "N slots left" warning state.
@@ -116,9 +121,12 @@ internal object FacilityImages {
     suspend fun preload(context: Context) = loading.withLock {
         val res = context.resources
         val artworkWidth = (76 * res.displayMetrics.density).toInt()
-        Facilities.map { it.artwork }
-            .filter { it !in cache }
-            .forEach { id -> cache[id] = withContext(Dispatchers.Default) { decode(res, id, artworkWidth) } }
+        // Card photos span the screen, capped at the 600 dp the list can grow to.
+        val photoWidth = minOf(res.displayMetrics.widthPixels, (600 * res.displayMetrics.density).toInt())
+        // Small artwork first, so the icons appear before the larger photos finish.
+        (Facilities.map { it.artwork to artworkWidth } + Facilities.map { it.photo to photoWidth })
+            .filter { (id, _) -> id !in cache }
+            .forEach { (id, width) -> cache[id] = withContext(Dispatchers.Default) { decode(res, id, width) } }
     }
 
     private fun decode(res: Resources, @DrawableRes id: Int, maxWidth: Int): ImageBitmap {
@@ -132,9 +140,9 @@ internal object FacilityImages {
 }
 
 @Composable
-private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier) {
+private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
     val bitmap = FacilityImages[id]
-    if (bitmap != null) Image(bitmap, null, modifier)
+    if (bitmap != null) Image(bitmap, null, modifier, contentScale = contentScale)
     else Box(modifier)
 }
 
@@ -144,9 +152,11 @@ fun BookFacilityScreen(navController: NavController) {
     // Normally done already from Home; this covers opening the screen before that finished.
     LaunchedEffect(Unit) { FacilityImages.preload(context) }
     val activity = context as? Activity
-    DisposableEffect(activity) {
+    // The glass sky is dark at the top, so it takes light status bar icons; Classic's white keeps dark ones.
+    val darkBackdrop = !ClassicTheme
+    DisposableEffect(activity, darkBackdrop) {
         val bars = activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView) }
-        bars?.isAppearanceLightStatusBars = false
+        bars?.isAppearanceLightStatusBars = !darkBackdrop
         onDispose { bars?.isAppearanceLightStatusBars = true }
     }
     var category by remember { mutableStateOf(FacilityCategory.ALL) }
@@ -214,7 +224,7 @@ private fun FacilityHeader(onBack: () -> Unit, onCalendar: () -> Unit) {
         GlassCircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier, onBack)
         Text(
             "Book Facility", Modifier.weight(1f).padding(horizontal = 8.dp), textAlign = TextAlign.Center, maxLines = 1,
-            fontFamily = DMSans, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White
+            fontFamily = DMSans, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = themed(Color.White, FacilityInk)
         )
         // Sized and shadowed to match Back on this screen.
         FoldingLabelButton(Icons.Rounded.CalendarMonth, "History", size = 52.dp, iconSize = 24.dp,
@@ -239,8 +249,8 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
     val shape = RoundedCornerShape(50)
     Box(
         Modifier.height(44.dp).clip(shape)
-            .background(if (selected) Color(0xFFBDF0DC) else Color(0xCCFFFFFF))
-            .border(1.5.dp, if (selected) Color(0xFF8FE3C4) else FacilityGlassBorder, shape)
+            .background(if (selected) themed(Color(0xFFBDF0DC), SoftGreen) else themed(Color(0xCCFFFFFF), ClassicCream))
+            .border(1.5.dp, if (selected) themed(Color(0xFF8FE3C4), PrimaryGreen) else FacilityGlassBorder, shape)
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center
@@ -256,47 +266,46 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
 private fun FacilityCard(facility: Facility, expanded: Boolean, onAbout: () -> Unit, onClick: () -> Unit) {
     // The arrow turns to point at the open picker below.
     val arrowTurn by animateFloatAsState(if (expanded) 90f else 0f, label = "arrowTurn")
-    val shape = RoundedCornerShape(24.dp)
     Surface(
-        shape = shape, color = Color(0x99FFFFFF), border = BorderStroke(1.5.dp, FacilityGlassBorder),
+        shape = RoundedCornerShape(26.dp), color = themed(Color(0xF2FFFFFF), ClassicCream), border = BorderStroke(1.5.dp, FacilityGlassBorder),
         shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
     ) {
-        Column(Modifier.padding(10.dp)) {
-            Row(Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                AboutChip(facility.name, Modifier, onAbout)
-                Spacer(Modifier.weight(1f))
-                AvailabilityBadge(facility.slotsLeft, Modifier)
+        Column(Modifier.padding(6.dp)) {
+            // A wide photo of the place leads the card, with About and availability over its top corners.
+            Box(Modifier.fillMaxWidth().aspectRatio(2.2f).clip(RoundedCornerShape(22.dp)).background(themed(Color(0xFFD5EDEA), ClassicMint))) {
+                FacilityImage(facility.photo, Modifier.fillMaxSize(), ContentScale.Crop)
+                AboutChip(facility.name, Modifier.align(Alignment.TopStart).padding(12.dp), onAbout)
+                AvailabilityBadge(facility.slotsLeft, Modifier.align(Alignment.TopEnd).padding(12.dp))
             }
-            Row(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp)).background(FacilityGlass)
-                    .border(1.dp, FacilityGlassBorder, RoundedCornerShape(20.dp))
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 FacilityIconTile(facility.icon, facility.artwork)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(facility.name, fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+                    Text(facility.name, fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk, maxLines = 1)
                     Text(
-                        "Max ${facility.maxPax} pax  â€¢  ${if (facility.deposit > 0) "S$${facility.deposit} deposit" else "No deposit"}",
+                        "Max ${facility.maxPax} pax  •  ${if (facility.deposit > 0) "$${facility.deposit} deposit" else "No deposit"}",
                         fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        buildAnnotatedString {
-                            append("Next available: ")
-                            withStyle(SpanStyle(
-                                color = if (facility.slotsLeft != null) FacilityOrange else FacilityGreen,
-                                fontWeight = FontWeight.SemiBold
-                            )) { append(facility.nextAvailable) }
-                        },
-                        fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted
-                    )
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp), color = themed(Color(0xFFE3ECEA), ClassicLine))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Schedule, null, tint = FacilityMuted, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            buildAnnotatedString {
+                                append("Next available: ")
+                                withStyle(SpanStyle(
+                                    color = if (facility.slotsLeft != null) FacilityOrange else FacilityGreen,
+                                    fontWeight = FontWeight.SemiBold
+                                )) { append(facility.nextAvailable) }
+                            },
+                            fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted
+                        )
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.size(46.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(Color.White),
+                    Modifier.size(50.dp).shadow(4.dp, CircleShape, ambientColor = Color(0x2216A37F), spotColor = Color(0x3316A37F))
+                        .clip(CircleShape).background(themed(Color(0xFFDDF6EE), ClassicMint)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Book ${facility.name}", tint = FacilityInk,
@@ -313,7 +322,7 @@ private fun AvailabilityBadge(slotsLeft: Int?, modifier: Modifier) {
     else FacilityOrange to "$slotsLeft slot${if (slotsLeft == 1) "" else "s"} left"
     Row(
         modifier.shadow(4.dp, RoundedCornerShape(50)).clip(RoundedCornerShape(50))
-            .background(if (slotsLeft == null) Color(0xF2E9FBF3) else Color(0xF2FFF2E8))
+            .background(if (slotsLeft == null) themed(Color(0xF2E9FBF3), ClassicMint) else Color(0xF2FFF2E8))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -327,7 +336,7 @@ private fun AvailabilityBadge(slotsLeft: Int?, modifier: Modifier) {
 private fun FacilityIconTile(icon: ImageVector, @DrawableRes artwork: Int) {
     Box(
         Modifier.size(76.dp).shadow(3.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp))
-            .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3F5EE)))),
+            .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFE3F5EE), ClassicMint)))),
         contentAlignment = Alignment.Center
     ) {
         FacilityGlyph(icon, artwork, 60.dp)
@@ -339,8 +348,8 @@ private fun FacilityIconTile(icon: ImageVector, @DrawableRes artwork: Int) {
 private fun FacilityGlyph(icon: ImageVector, @DrawableRes artwork: Int, size: Dp) {
     // Same rule as Profile's selection: the icon set applies unless Theme 0's design artwork is on.
     val flat = AppPreferences.iconSet == IconSet.THREE &&
-        (AppPreferences.theme == AppTheme.ONE || !AppPreferences.useReferenceArtwork)
-    if (flat) Icon(icon, null, tint = Color(0xFF2BA383), modifier = Modifier.size(size * .7f))
+        (AppPreferences.theme != AppTheme.ZERO || !AppPreferences.useReferenceArtwork)
+    if (flat) Icon(icon, null, tint = themed(Color(0xFF2BA383), PrimaryGreen), modifier = Modifier.size(size * .7f))
     else FacilityImage(artwork, Modifier.size(size))
 }
 

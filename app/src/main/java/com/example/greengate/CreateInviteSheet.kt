@@ -3,6 +3,7 @@ package com.example.greengate
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,16 +32,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
+import com.example.greengate.ui.theme.SoftGreen
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 internal enum class InviteType(val title: String, val subtitle: String) {
     FAMILY("Family / Friend", "For people you know"),
@@ -126,7 +135,7 @@ internal fun InviteFormButton(label: String, onClick: () -> Unit) {
     Box(
         Modifier.padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 20.dp).fillMaxWidth().height(54.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
+            .background(greenButton(Color(0xFF2E9A79)))
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -169,8 +178,8 @@ private fun HistoryBar(onClick: () -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Row(
         Modifier.fillMaxWidth().height(60.dp).clip(shape)
-            .background(Brush.horizontalGradient(listOf(Color(0xFFE9F7F1), Color(0xFFDDF2EA))))
-            .border(1.dp, Color(0xFFCDEBDF), shape)
+            .background(themed(Brush.horizontalGradient(listOf(Color(0xFFE9F7F1), Color(0xFFDDF2EA))), SolidColor(ClassicMint)))
+            .border(1.dp, themed(Color(0xFFCDEBDF), SoftGreen), shape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -193,24 +202,15 @@ private fun InviteTypeCard(type: InviteType, modifier: Modifier, onClick: () -> 
     Column(
         modifier.height(178.dp)
             .shadow(6.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
-            .clip(shape).background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF6FAF8))))
-            .border(1.dp, Color(0xFFEAF1EE), shape)
+            .clip(shape).background(Brush.verticalGradient(listOf(Color.White, themed(Color(0xFFF6FAF8), ClassicCream))))
+            .border(1.dp, themed(Color(0xFFEAF1EE), ClassicLine), shape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(Modifier.size(width = 120.dp, height = 92.dp), contentAlignment = Alignment.Center) {
-            when (type) {
-                // Built from Icon Set 0.1's clay figure and heart, which are full resolution.
-                InviteType.FAMILY -> {
-                    Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(100.dp))
-                    Image(painterResource(R.drawable.ic_clay_community_heart), null,
-                        Modifier.align(Alignment.BottomEnd).offset(x = (-14).dp, y = 2.dp).size(52.dp))
-                }
-                InviteType.DELIVERY -> InviteArt(R.drawable.invite_delivery)
-                InviteType.CAB -> InviteArt(R.drawable.invite_cab)
-                InviteType.OTHER -> InviteArt(R.drawable.invite_other)
-            }
+            // The art's white margin may spill past the box; multiplied onto the card, it doesn't show.
+            InviteTypeArt(type, Modifier.requiredSize(112.dp))
         }
         Spacer(Modifier.height(10.dp))
         Text(type.title, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
@@ -219,8 +219,28 @@ private fun InviteTypeCard(type: InviteType, modifier: Modifier, onClick: () -> 
     }
 }
 
-// TODO: replace these with full-resolution transparent artwork; they are cut from the mock-up.
+@DrawableRes
+private fun InviteType.art() = when (this) {
+    InviteType.FAMILY -> R.drawable.invite_family
+    InviteType.DELIVERY -> R.drawable.invite_delivery
+    InviteType.CAB -> R.drawable.invite_cab
+    InviteType.OTHER -> R.drawable.invite_other
+}
+
+/**
+ * A visit type's 3D art. It's rendered on white, so by default it's multiplied into whatever is behind
+ * it and the white drops out over a tinted backdrop. [blend] = false draws it as is, for the white
+ * sheet: there it may sit inside a fading layer, where multiplying has nothing beneath it to blend with.
+ */
 @Composable
-private fun InviteArt(@DrawableRes art: Int) {
-    Image(painterResource(art), null, Modifier.fillMaxHeight())
+internal fun InviteTypeArt(type: InviteType, modifier: Modifier, blend: Boolean = true) {
+    if (!blend) {
+        Image(painterResource(type.art()), null, modifier)
+        return
+    }
+    val bitmap = ImageBitmap.imageResource(type.art())
+    Canvas(modifier) {
+        drawImage(bitmap, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            blendMode = BlendMode.Multiply, filterQuality = FilterQuality.High)
+    }
 }

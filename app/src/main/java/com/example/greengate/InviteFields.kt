@@ -37,7 +37,9 @@ import com.example.greengate.ui.theme.DMSans
 // a label above each full-width white field, with the field's icon inside it.
 
 private val InviteFieldShape = RoundedCornerShape(14.dp)
-internal val InviteFieldBorder = Color(0xFFE3ECE9)
+internal val InviteFieldBorder get() = themed(Color(0xFFE3ECE9), ClassicLine)
+/** The fill of a selected chip in an invite form. */
+internal val InviteSelectedFill get() = themed(Color(0xFFE7F6F0), ClassicMint)
 internal val InviteErrorRed = Color(0xFFC2412D)
 
 internal val InviteCountryCodes = listOf("+65", "+60", "+62", "+63", "+66", "+91", "+44", "+1")

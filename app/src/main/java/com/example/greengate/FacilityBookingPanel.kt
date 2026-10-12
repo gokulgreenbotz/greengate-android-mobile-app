@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,12 +27,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
+import com.example.greengate.ui.theme.PrimaryGreen
+import com.example.greengate.ui.theme.SecondaryGreen
+import com.example.greengate.ui.theme.SoftGreen
 import java.util.Calendar
 
 /** A calendar day; months are 0-based like [Calendar.MONTH]. */
@@ -63,6 +69,12 @@ private val WeekdayNames = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "T
 
 // Hourly slots from 7 AM; the last one starts at 9 PM.
 private val SlotHours = 7..21
+
+/** The slot grid shows one half of the day at a time; noon onwards is all Afternoon. */
+private enum class SlotPeriod(val label: String, val hours: IntRange) {
+    MORNING("Morning", SlotHours.first..11),
+    AFTERNOON("Afternoon", 12..SlotHours.last)
+}
 
 private enum class SlotState { OPEN, FEW_LEFT, FULL, PAST }
 
@@ -104,7 +116,7 @@ internal fun FacilityBookingPanel(
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))))
+            .background(themed(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))), SolidColor(ClassicCream)))
             .border(1.5.dp, FacilityGlassBorder, shape)
             .padding(16.dp)
     ) {
@@ -162,8 +174,8 @@ private fun DayChip(title: String, subtitle: String, selected: Boolean, modifier
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.height(58.dp).clip(shape)
-            .background(if (selected) Color(0xFFDDF5EC) else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) Color(0xFF3FB58E) else Color(0xFFE3ECE9), shape)
+            .background(if (selected) themed(Color(0xFFDDF5EC), ClassicMint) else Color.White)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) themed(Color(0xFF3FB58E), PrimaryGreen) else InviteFieldBorder, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
@@ -245,7 +257,7 @@ private fun DayCell(
     Box(modifier.height(52.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(46.dp).clip(RoundedCornerShape(16.dp))
-                .then(if (isSelected) Modifier.background(Brush.verticalGradient(listOf(Color(0xFF2AA07D), FacilityGreen))) else Modifier)
+                .then(if (isSelected) Modifier.background(Brush.verticalGradient(listOf(themed(Color(0xFF2AA07D), SecondaryGreen), FacilityGreen))) else Modifier)
                 .clickable(enabled = selectable, role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -275,23 +287,36 @@ private fun SlotPicker(
     var selectedHour by remember(day) { mutableStateOf<Int?>(null) }
     var guests by remember { mutableIntStateOf(1) }
     val nowHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    // Once today's last morning slot has gone, open on the afternoon.
+    var period by remember(day) {
+        mutableStateOf(if (day == today && nowHour >= SlotPeriod.MORNING.hours.last) SlotPeriod.AFTERNOON else SlotPeriod.MORNING)
+    }
     Column {
         Text(day.longLabel(), fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-        Text("Choose a time slot", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Select Time", Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+            PeriodToggle(period) { period = it }
+        }
+        Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LegendDot(FacilityGreen, "Selected")
             LegendDot(FacilityOrange, "Few left")
             LegendDot(FacilityMuted.copy(alpha = .4f), "Full")
         }
         Spacer(Modifier.height(12.dp))
-        SlotHours.chunked(3).forEach { row ->
-            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { hour ->
-                    val state = slotState(facilityName, day, hour, busy, today, nowHour)
-                    SlotChip(hour, state, selected = hour == selectedHour, Modifier.weight(1f)) { selectedHour = hour }
+        // The chosen slot stays chosen when switching halves; the bar below still shows it.
+        AnimatedContent(period, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "slotPeriod") { shown ->
+            Column {
+                shown.hours.chunked(SlotColumns).forEach { row ->
+                    Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { hour ->
+                            val state = slotState(facilityName, day, hour, busy, today, nowHour)
+                            SlotChip(hour, state, selected = hour == selectedHour, Modifier.weight(1f)) { selectedHour = hour }
+                        }
+                        repeat(SlotColumns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -309,6 +334,32 @@ private fun SlotPicker(
     }
 }
 
+private const val SlotColumns = 4
+
+/** Morning / Afternoon segmented switch beside "Select Time". */
+@Composable
+private fun PeriodToggle(selected: SlotPeriod, onSelect: (SlotPeriod) -> Unit) {
+    Row(
+        Modifier.clip(CircleShape).background(Color(0xE6FFFFFF)).border(1.dp, FacilityGlassBorder, CircleShape)
+            .selectableGroup().padding(3.dp)
+    ) {
+        SlotPeriod.entries.forEach { period ->
+            val active = period == selected
+            Box(
+                Modifier.height(32.dp).clip(CircleShape)
+                    .background(if (active) themed(Color(0xFFCDF3E4), ClassicMint) else Color.Transparent)
+                    .selectable(active, role = Role.Tab) { onSelect(period) }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(period.label, fontFamily = DMSans, fontSize = 13.sp,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (active) FacilityGreen else FacilityInk)
+            }
+        }
+    }
+}
+
 /** Glass bar under the slots: the facility icon, the chosen date then time, and Continue. */
 @Composable
 private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> Unit, onContinue: (Int) -> Unit) {
@@ -321,7 +372,7 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
     ) {
         Box(
             Modifier.size(58.dp).clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3F5EE))))
+                .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFE3F5EE), ClassicMint))))
                 .border(1.dp, FacilityGlassBorder, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) { glyph() }
@@ -341,7 +392,7 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
         Spacer(Modifier.width(8.dp))
         Row(
             Modifier.height(50.dp).clip(RoundedCornerShape(18.dp))
-                .background(if (hour != null) Color(0xFF8EF0CF) else FacilityMuted.copy(alpha = .18f))
+                .background(if (hour != null) themed(Color(0xFF8EF0CF), SoftGreen) else FacilityMuted.copy(alpha = .18f))
                 .clickable(enabled = hour != null, role = Role.Button) { hour?.let(onContinue) }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically

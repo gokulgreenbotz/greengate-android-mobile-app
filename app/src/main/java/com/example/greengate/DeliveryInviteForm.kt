@@ -56,8 +56,8 @@ private enum class DeliveryPage { FORM, SUMMARY }
 private val DeliveryValidFor = listOf(1 to "1 hour", 2 to "2 hours", 3 to "3 hours", 4 to "4 hours")
 
 // Fields come from InviteFields.kt; these style the partner chips and summary.
-private val DeliveryBorder = InviteFieldBorder
-private val DeliverySelectedFill = Color(0xFFE7F6F0)
+private val DeliveryBorder get() = InviteFieldBorder
+private val DeliverySelectedFill get() = InviteSelectedFill
 
 // Half hours across the day, in minutes after midnight.
 private val DeliverySlots = (0..47).map { it * 30 }
@@ -115,7 +115,7 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
             onBack = if (page == DeliveryPage.SUMMARY) ({ page = DeliveryPage.FORM }) else null,
             onClose = onClose,
         ) {
-            Image(painterResource(R.drawable.invite_delivery), null, Modifier.size(60.dp))
+            InviteTypeArt(InviteType.DELIVERY, Modifier.requiredSize(72.dp), blend = false)
         }
         Spacer(Modifier.height(6.dp))
         AnimatedContent(

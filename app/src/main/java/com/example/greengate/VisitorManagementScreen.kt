@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.greengate.ui.theme.BackgroundCream
 import com.example.greengate.ui.theme.DMSans
 
 private enum class VisitorTab(val label: String) { ACTIVE("Active"), UPCOMING("Upcoming"), PAST("Past") }
@@ -55,16 +56,10 @@ internal fun InviteAvatar(invite: VisitorInvite, size: Dp) {
         Modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFFDF1E6), Color(0xFFF3E3D3)))),
         contentAlignment = Alignment.Center
     ) {
-        when (invite.type) {
-            InviteType.FAMILY -> {
-                Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(size * .86f))
-                if (invite.relationship == "Family") Image(painterResource(R.drawable.ic_clay_community_heart), null,
-                    Modifier.align(Alignment.BottomEnd).padding(end = size * .06f, bottom = size * .06f).size(size * .42f))
-            }
-            InviteType.DELIVERY -> Image(painterResource(R.drawable.invite_delivery), null, Modifier.size(size * .8f))
-            InviteType.CAB -> Image(painterResource(R.drawable.invite_cab), null, Modifier.size(size * .84f))
-            InviteType.OTHER -> Image(painterResource(R.drawable.invite_other), null, Modifier.size(size * .78f))
-        }
+        // Friends keep the plain clay figure; the heart art marks family. The circle clips the art's white margin.
+        if (invite.type == InviteType.FAMILY && invite.relationship != "Family")
+            Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(size * .86f))
+        else InviteTypeArt(invite.type, Modifier.size(size))
     }
 }
 
@@ -93,7 +88,7 @@ internal fun VisitorManagementScreen(navController: NavController) {
                 Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().height(58.dp)
                     .shadow(8.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen)))
+                    .background(greenButton(Color(0xFF1D8A6A)))
                     .clickable(role = Role.Button) { showCreate = true },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
             ) {
@@ -103,7 +98,7 @@ internal fun VisitorManagementScreen(navController: NavController) {
             }
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(50))
-                    .background(Color(0x99FFFFFF)).padding(4.dp)
+                    .background(themed(Color(0x99FFFFFF), BackgroundCream)).padding(4.dp)
             ) {
                 VisitorTab.entries.forEach { t ->
                     val selected = t == tab

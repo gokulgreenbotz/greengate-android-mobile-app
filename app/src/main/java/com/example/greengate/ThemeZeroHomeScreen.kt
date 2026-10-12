@@ -244,24 +244,25 @@ private fun ReferenceAnnouncement(s: Float, onClick: () -> Unit) {
     }
     ReferenceGlass(Modifier.fillMaxWidth().height(AnnouncementCardHeight.u(s)), s, onClick, blurBackdrop = true) {
         ReferenceArt(intArrayOf(55, 780, 148, 116), Modifier.align(Alignment.CenterStart).padding(start = 12.u(s)).size(72.u(s), 59.u(s)), feather = true)
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 96.u(s), end = 82.u(s))) {
-            // A small label over the message, which is what residents need to read.
-            Text("Priority Announcements", color = GateGreen, fontFamily = DMSans, fontSize = 11.t(s), lineHeight = 14.t(s),
+        Column(Modifier.fillMaxHeight().padding(start = 96.u(s), end = 82.u(s), top = 14.u(s), bottom = 10.u(s))) {
+            // The label sits at the top of the card; the message and dots centre in the space below it.
+            Text("Priority Announcements", color = GateGreen, fontFamily = DMSans, fontSize = 13.t(s), lineHeight = 16.t(s),
                 fontWeight = FontWeight.Medium, letterSpacing = .4f.t(s))
-            Spacer(Modifier.height(3.u(s)))
-            AnimatedContent(current, transitionSpec = {
-                (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
-            }, label = "priorityAnnouncement") { index ->
-                Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
-                    fontWeight = FontWeight.Medium, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.height(6.u(s)))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.u(s)), verticalAlignment = Alignment.CenterVertically) {
-                PriorityAnnouncements.indices.forEach { index ->
-                    val active = index == current
-                    val width by animateDpAsState(if (active) 14.u(s) else 5.u(s), label = "dotWidth")
-                    val color by animateColorAsState(if (active) GateGreen else GateGreen.copy(alpha = .25f), label = "dotColor")
-                    Box(Modifier.size(width, 5.u(s)).background(color, CircleShape))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                AnimatedContent(current, transitionSpec = {
+                    (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
+                }, label = "priorityAnnouncement") { index ->
+                    Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
+                        fontWeight = FontWeight.Medium, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(6.u(s)))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.u(s)), verticalAlignment = Alignment.CenterVertically) {
+                    PriorityAnnouncements.indices.forEach { index ->
+                        val active = index == current
+                        val width by animateDpAsState(if (active) 14.u(s) else 5.u(s), label = "dotWidth")
+                        val color by animateColorAsState(if (active) GateGreen else GateGreen.copy(alpha = .25f), label = "dotColor")
+                        Box(Modifier.size(width, 5.u(s)).background(color, CircleShape))
+                    }
                 }
             }
         }
@@ -308,7 +309,7 @@ private fun ReferenceFeatures(nav: NavController, s: Float, onInvite: () -> Unit
                                 feature.route == Screen.Community.route && (AppPreferences.iconSet == IconSet.ZERO || AppPreferences.iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(progress, active, modifier, AppPreferences.iconSet)
                                 feature.route == Screen.Community.route -> CommunityIcon(progress, active, modifier)
                                 AppPreferences.iconSet == IconSet.TWO -> LayeredActionIcon(if (feature.route == Screen.Feedback.route) 3 else index, progress, active, modifier)
-                                else -> LayeredIconSetOne(if (feature.route == Screen.Feedback.route) 3 else index, progress, active, modifier, AppPreferences.iconSet)
+                                else -> LayeredIconSetZero(if (feature.route == Screen.Feedback.route) 3 else index, progress, active, modifier, AppPreferences.iconSet)
                             }
                         } else {
                         if (feature.route == Screen.Feedback.route) Icon(Icons.Rounded.Feedback, null, Modifier.align(Alignment.TopCenter).padding(top = 22.u(s)).size(76.u(s)), tint = GateGreen)
@@ -415,7 +416,7 @@ private fun ReferenceNavItem(icon: ImageVector, title: String, selected: Boolean
 }
 
 @Composable
-private fun ReferenceArt(crop: IntArray, modifier: Modifier, feather: Boolean = false) {
+internal fun ReferenceArt(crop: IntArray, modifier: Modifier, feather: Boolean = false) {
     val bitmap = ImageBitmap.imageResource(R.drawable.gg_home_reference_art)
     val painter = remember(bitmap, crop.toList()) { BitmapPainter(bitmap, IntOffset(crop[0], crop[1]), IntSize(crop[2], crop[3])) }
     val edges = if (feather) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {

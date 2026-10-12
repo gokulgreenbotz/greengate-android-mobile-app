@@ -94,6 +94,10 @@ fun HomeScreen(navController: NavController) {
         ThemeZeroHomeScreen(navController)
         return
     }
+    if (AppPreferences.theme == AppTheme.TWO) {
+        ThemeTwoHomeScreen(navController)
+        return
+    }
     var showSos by remember { mutableStateOf(false) }
     var showInvite by remember { mutableStateOf(false) }
     if (showInvite) CreateInviteSheet(
@@ -157,8 +161,10 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                 Spacer(Modifier.width(9.dp))
                 Surface(onClick = { navController.navigate(Screen.Profile.route) }, shape = CircleShape,
                     color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp, modifier = Modifier.size(48.dp)) {
+                    // The art has its own ring and status dot around a photo disc centred at (50, 51)
+                    // px; crop inside that disc so the button's circle is the only one.
                     MarinaArt(R.drawable.marina_profile_avatar_reference, Modifier.fillMaxSize().padding(2.dp).clip(CircleShape),
-                        crop = intArrayOf(5, 10, 88, 88), description = "Alex's profile", scale = ContentScale.Crop)
+                        crop = intArrayOf(16, 17, 68, 68), description = "Alex's profile", scale = ContentScale.Crop)
                 }
             }
             Text("Good Morning, Alex", fontFamily = DMSans, fontSize = 24.sp,
@@ -281,7 +287,7 @@ private fun ActionGrid(navController: NavController, onInvite: () -> Unit) {
     // Feedback appears only once it's switched on in Profile; the rotation follows what's shown.
     val icons = if (AppPreferences.showFeedback) allIcons else allIcons.filter { it.route != Screen.Feedback.route }
     val sequence = rememberActionIconSequence(iconSet, icons.map { icon ->
-        if ((iconSet == IconSet.ZERO || iconSet == IconSet.CLAY || iconSet == IconSet.ONE) && icon.layeredArt == 3) 2100 else icon.durationMillis
+        if ((iconSet == IconSet.ZERO || iconSet == IconSet.CLAY) && icon.layeredArt == 3) 2100 else icon.durationMillis
     })
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         icons.withIndex().chunked(2).forEach { row ->
@@ -297,7 +303,7 @@ private fun ActionGrid(navController: NavController, onInvite: () -> Unit) {
                             art == null && (iconSet == IconSet.ZERO || iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(progress, active, iconSet = iconSet)
                             art == null -> CommunityIcon(progress, active)
                             iconSet == IconSet.TWO -> LayeredActionIcon(art, progress, active)
-                            else -> LayeredIconSetOne(art, progress, active, iconSet = iconSet)
+                            else -> LayeredIconSetZero(art, progress, active, iconSet = iconSet)
                         }
                     }
                 }
@@ -550,6 +556,10 @@ internal val BottomBarHeight = 78.dp
 fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
     if (AppPreferences.theme == AppTheme.ZERO) {
         ThemeZeroBottomNavigation(navController, currentRoute)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.TWO) {
+        ThemeTwoBottomNavigation(navController, currentRoute)
         return
     }
     fun navigate(route: String) {

@@ -116,7 +116,7 @@ internal fun BookingConfirmedScreen(navController: NavController, booking: Booki
         title = { Text("Cancel this booking?", fontFamily = DMSans) },
         text = {
             Text(
-                if (facility.deposit > 0) "Your S$${facility.deposit} deposit will be refunded to your wallet."
+                if (facility.deposit > 0) "Your $${facility.deposit} deposit will be refunded to your wallet."
                 else "The slot will be released for other residents.",
                 fontFamily = DMSans
             )
@@ -407,7 +407,7 @@ private fun PaidSummaryCard(deposit: Int, method: PaymentMethod) {
             Text("Total Paid", Modifier.weight(1f).padding(top = 6.dp), fontFamily = DMSans, fontSize = 18.sp,
                 fontWeight = FontWeight.Medium, color = FacilityInk)
             Column(horizontalAlignment = Alignment.End) {
-                Text("S$$deposit.00", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ConfirmedDeepGreen)
+                Text("$$deposit.00", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ConfirmedDeepGreen)
                 Text(if (deposit > 0) "Paid via ${method.title}" else "Nothing to pay",
                     fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
             }
@@ -437,7 +437,7 @@ private fun PaidRow(icon: ImageVector, label: String, amount: Int) {
         }
         Spacer(Modifier.width(12.dp))
         Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk)
-        Text("S$$amount.00", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+        Text("$$amount.00", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
     }
 }
 

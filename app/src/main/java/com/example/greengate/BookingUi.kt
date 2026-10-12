@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -42,14 +43,34 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
+import com.example.greengate.ui.theme.PrimaryGreen
+import com.example.greengate.ui.theme.PrimaryGreenDark
+import com.example.greengate.ui.theme.SoftGreen
 import kotlinx.coroutines.delay
 
+// Theme 1 - Classic trades the glass for the plain white, cream and sage of its Home screen.
+// AppPreferences.theme is snapshot state, so composables reading these recompose on a theme change.
+internal val ClassicTheme: Boolean get() = AppPreferences.theme == AppTheme.ONE
+
+/** [glass] normally; [classic] under Theme 1 - Classic. */
+internal fun themed(glass: Color, classic: Color) = if (ClassicTheme) classic else glass
+internal fun themed(glass: Brush, classic: Brush) = if (ClassicTheme) classic else glass
+
+internal val ClassicCream = Color(0xFFFCF9F3)
+internal val ClassicLine = Color(0xFFEAE3D6)
+internal val ClassicMint = Color(0xFFEDF3EA)
+internal val ClassicBackdrop = SolidColor(Color.White)
+
+/** A primary button's green, lighter at the top; [glassTop] is that top colour in the glass theme. */
+internal fun greenButton(glassTop: Color) = Brush.verticalGradient(listOf(themed(glassTop, PrimaryGreen), BookingsDeepGreen))
+
 // Shared by My Bookings, Booking Details, Payments & Deposits and Transaction Details.
-internal val BookingsBackdrop = Brush.verticalGradient(
+private val GlassBackdrop = Brush.verticalGradient(
     0f to Color(0xFFBFE3E6), 0.3f to Color(0xFFDCEFEE), 1f to Color(0xFFE8F5F2)
 )
-internal val BookingsDeepGreen = Color(0xFF0F6B54)
-internal val BookingsMint = Color(0xFFDDF5EC)
+internal val BookingsBackdrop get() = themed(GlassBackdrop, ClassicBackdrop)
+internal val BookingsDeepGreen get() = themed(Color(0xFF0F6B54), PrimaryGreenDark)
+internal val BookingsMint get() = themed(Color(0xFFDDF5EC), SoftGreen)
 internal val BookingsDivider = Color(0x1F14232B)
 internal val BookingsRed = Color(0xFFD93A2B)
 
@@ -145,7 +166,7 @@ internal fun GlassCard(
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier.fillMaxWidth().shadow(2.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
-            .clip(shape).background(Color(0xB3FFFFFF)).border(1.5.dp, FacilityGlassBorder, shape)
+            .clip(shape).background(themed(Color(0xB3FFFFFF), ClassicCream)).border(1.5.dp, FacilityGlassBorder, shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(padding),
         content = content
@@ -157,18 +178,18 @@ internal fun GlassCard(
 internal fun ArtworkTile(facility: Facility, size: Dp) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(size * .2f))
-            .background(Brush.linearGradient(listOf(Color.White, Color(0xFFDDF0EA)))),
+            .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFDDF0EA), ClassicMint)))),
         contentAlignment = Alignment.Center
     ) {
         Image(painterResource(facility.artwork), null, Modifier.size(size * .8f))
     }
 }
 
-/** Rounded pill button; [background] defaults to frosted glass. */
+/** Rounded pill button; [background] defaults to frosted glass, or plain white in Classic. */
 @Composable
 internal fun PillButton(
     label: String, modifier: Modifier, tint: Color = FacilityInk, icon: ImageVector? = null,
-    background: Brush = Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))),
+    background: Brush = themed(Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))), SolidColor(Color.White)),
     onClick: () -> Unit
 ) {
     Row(
@@ -186,7 +207,8 @@ internal fun PillButton(
     }
 }
 
-internal val MintButton = Brush.horizontalGradient(listOf(Color(0xFF9AF0D2), Color(0xFF7FE6C4)))
+private val GlassMintButton = Brush.horizontalGradient(listOf(Color(0xFF9AF0D2), Color(0xFF7FE6C4)))
+internal val MintButton get() = themed(GlassMintButton, SolidColor(SoftGreen))
 internal val RedTintButton = Brush.linearGradient(listOf(Color(0xFFFDE9E6), Color(0xFFFBDCD7)))
 
 /** Upcoming bookings read "Confirmed" once their QR pass is ready, "Upcoming" before that. */

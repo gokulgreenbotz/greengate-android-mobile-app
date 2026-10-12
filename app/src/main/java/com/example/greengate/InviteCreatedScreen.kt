@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -90,7 +89,7 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
                     }
                     Box(
                         Modifier.size(78.dp).scale(pop.value).shadow(10.dp, CircleShape).clip(CircleShape)
-                            .background(Brush.verticalGradient(listOf(Color(0xFF2AA07D), BookingsDeepGreen))),
+                            .background(greenButton(Color(0xFF2AA07D))),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(44.dp)) }
                 }
@@ -117,7 +116,7 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
                 Modifier.padding(16.dp).fillMaxWidth().height(56.dp)
                     .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen)))
+                    .background(greenButton(Color(0xFF1D8A6A)))
                     .clickableButton { done() },
                 contentAlignment = Alignment.Center
             ) { Text("Done", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }

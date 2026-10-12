@@ -46,13 +46,14 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.greengate.ui.theme.BackgroundCream
 import com.example.greengate.ui.theme.DMSans
 import java.util.Calendar
 
 // Fields come from InviteFields.kt; these style the tabs and chips around them.
 private val CabFieldShape = RoundedCornerShape(14.dp)
-private val CabFieldBorder = InviteFieldBorder
-private val CabSelectedFill = Color(0xFFE7F6F0)
+private val CabFieldBorder get() = InviteFieldBorder
+private val CabSelectedFill get() = InviteSelectedFill
 
 // TODO: replace the logos cut from the mock-up with the companies' official artwork.
 private enum class CabCompany(val label: String, @DrawableRes val logo: Int?) {
@@ -143,7 +144,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
 
     Column(Modifier.fillMaxWidth().imePadding()) {
         InviteFormHeader("Invite Cab", "Create a cab invite for pickup or drop", onBack = null, onClose = onClose) {
-            Image(painterResource(R.drawable.cab_invite_header), null, Modifier.size(60.dp))
+            InviteTypeArt(InviteType.CAB, Modifier.requiredSize(72.dp), blend = false)
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.padding(horizontal = 20.dp)) {
@@ -188,7 +189,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                         val selected = i in days
                         Box(
                             Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) BookingsDeepGreen else Color(0xFFF2F5F4))
+                                .background(if (selected) BookingsDeepGreen else themed(Color(0xFFF2F5F4), BackgroundCream))
                                 .toggleable(selected, role = Role.Checkbox) { days = if (it) days + i else days - i },
                             contentAlignment = Alignment.Center
                         ) {
