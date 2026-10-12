@@ -29,10 +29,13 @@ class CallSignalingManager(
     private val jsonMediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
     private val signalingUrl = "https://kvdb.io/JvTpnXFCynR2tFAjEa8ysm/active_call"
     private val statusUrl = "https://kvdb.io/JvTpnXFCynR2tFAjEa8ysm/call_status"
+    /** Phone → kiosk channel (hang-up, open gate). Kiosk → phone stays on active_call. */
+    private val kioskInboxUrl = "https://kvdb.io/JvTpnXFCynR2tFAjEa8ysm/mobile_to_kiosk"
 
     private var executor: ScheduledExecutorService? = null
     private var lastProcessedCallId: String? = null
     private var lastProcessedTimestamp: Long = 0
+    private var lastDoorResultRequestId: String? = null
 
     fun startListening() {
         if (executor != null && !executor!!.isShutdown) return
@@ -73,6 +76,15 @@ class CallSignalingManager(
                         Log.i("CallSignalingManager", "HTTPS SIGNAL RECEIVED: INCOMING CALL from Kiosk! callId=$callId " +
                             "age(kioskClock->phoneClock)=${now - timestamp}ms")
                         handleIncomingCall(json)
+                    } else if ((event == "DOOR_UNLOCKED" || event == "DOOR_UNLOCK_FAILED") &&
+                        callId == controller.currentCredentials?.callId &&
+                        json.optString("requestId") != lastDoorResultRequestId
+                    ) {
+                        // Kiosk's answer to our unlock request.
+                        lastDoorResultRequestId = json.optString("requestId")
+                        val ok = event == "DOOR_UNLOCKED"
+                        Log.i("CallSignalingManager", "Door result from kiosk: $event callId=$callId")
+                        controller.onDoorUnlockResult(ok, json.optString("message"), json.optString("requestId"))
                     } else if (event == "CALL_ENDED" && callId == controller.currentCredentials?.callId) {
                         lastProcessedCallId = null
                         Log.i("CallSignalingManager", "HTTPS SIGNAL RECEIVED: CALL ENDED from Kiosk for callId=$callId")
@@ -141,28 +153,67 @@ class CallSignalingManager(
         }
     }
 
-    fun broadcastCallEnded(callId: String?, reason: String = "HANGUP") {
+    /**
+     * Phone → kiosk messages go to their OWN relay key. They used to share
+     * "active_call" with the kiosk's messages, so either side could overwrite
+     * the other's message before it was read — e.g. the resident's hang-up or
+     * unlock request never reached the kiosk.
+     */
+    private fun postToKiosk(payload: JSONObject, what: String) {
         Executors.newSingleThreadExecutor().execute {
             try {
-                val json = JSONObject().apply {
-                    put("event", "CALL_ENDED")
-                    put("sender", "MOBILE_RECEIVER")
-                    put("callId", callId ?: "")
-                    put("reason", reason)
-                    put("timestamp", System.currentTimeMillis())
+                payload.put("sender", "MOBILE_RECEIVER")
+                if (!payload.has("messageId")) {
+                    payload.put("messageId", "m-${System.currentTimeMillis()}-${(1000..9999).random()}")
                 }
-
-                val body = json.toString().toRequestBody(jsonMediaType)
+                payload.put("timestamp", System.currentTimeMillis())
                 val req = Request.Builder()
-                    .url(signalingUrl)
-                    .post(body)
+                    .url(kioskInboxUrl)
+                    .post(payload.toString().toRequestBody(jsonMediaType))
                     .build()
-
-                client.newCall(req).execute().close()
+                // Relay is only the backup path now (the request also goes over
+                // the call itself), so a relay failure is logged, not shown.
+                client.newCall(req).execute().use { resp ->
+                    Log.i("CallSignalingManager", "$what sent to kiosk via relay http=${resp.code}")
+                }
             } catch (e: Exception) {
-                Log.e("CallSignalingManager", "Failed to broadcast call ended signal", e)
+                Log.w("CallSignalingManager", "Relay send of $what failed: ${e.message}")
             }
         }
+    }
+
+    fun broadcastCallEnded(callId: String?, reason: String = "HANGUP") {
+        postToKiosk(
+            JSONObject().apply {
+                put("event", "CALL_ENDED")
+                put("callId", callId ?: "")
+                put("reason", reason)
+            },
+            what = "CALL_ENDED"
+        )
+    }
+
+    /**
+     * Asks the kiosk on this call to open the gate. [endCall] = also finish the
+     * call afterwards. The kiosk only acts on a request whose callId matches its
+     * live call and replies with DOOR_UNLOCKED / DOOR_UNLOCK_FAILED on
+     * "active_call" (handled in pollCallSignal).
+     *
+     * DEMO ONLY: the relay has no authentication. In production this must go
+     * through the backend, which checks the resident may open this gate.
+     */
+    fun requestOpenGate(callId: String?, endCall: Boolean, requestId: String) {
+        if (callId.isNullOrBlank()) return
+        postToKiosk(
+            JSONObject().apply {
+                put("event", "OPEN_GATE")
+                put("callId", callId)
+                put("endCall", endCall)
+                // Same id as the in-call message → kiosk opens only once.
+                put("messageId", requestId)
+            },
+            what = "OPEN_GATE(endCall=$endCall)"
+        )
     }
 
     fun postStatus(event: String) {

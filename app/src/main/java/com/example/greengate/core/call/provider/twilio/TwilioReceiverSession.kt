@@ -11,6 +11,7 @@ import com.twilio.video.AudioTrack
 import com.twilio.video.CameraCapturer
 import com.twilio.video.ConnectOptions
 import com.twilio.video.LocalAudioTrack
+import com.twilio.video.LocalDataTrack
 import com.twilio.video.LocalVideoTrack
 import com.twilio.video.RemoteAudioTrack
 import com.twilio.video.RemoteAudioTrackPublication
@@ -24,7 +25,9 @@ import com.twilio.video.TwilioException
 import com.twilio.video.Video
 import com.twilio.video.VideoView
 import com.twilio.video.VideoTrack
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tvi.webrtc.Camera1Enumerator
@@ -52,6 +55,30 @@ class TwilioReceiverSession(
     /** Set once we decide this call is over; any late onConnected must leave. */
     @Volatile private var torndown = false
 
+    /** In-call message channel to the kiosk (gate requests / results, hang-up). */
+    private var localDataTrack: LocalDataTrack? = null
+    private val _appMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    override val appMessages: SharedFlow<String> = _appMessages
+    private val dataListener = object : RemoteDataTrack.Listener {
+        override fun onMessage(remoteDataTrack: RemoteDataTrack, messageBuffer: java.nio.ByteBuffer) = Unit
+        override fun onMessage(remoteDataTrack: RemoteDataTrack, message: String) {
+            Log.d("TwilioReceiverSession", "in-call message: $message")
+            _appMessages.tryEmit(message)
+        }
+    }
+
+    override fun sendAppMessage(message: String): Boolean {
+        val track = localDataTrack ?: return false
+        if (room?.state != Room.State.CONNECTED) return false
+        return runCatching { track.send(message) }.isSuccess
+    }
+
+    private val _localView = MutableStateFlow<View?>(null)
+    override val localView: StateFlow<View?> = _localView.asStateFlow()
+    private var localPreview: VideoView? = null
+    private var cameraId: String? = null
+    private var backgrounded = false
+
     override suspend fun connect() {
         _state.value = ReceiverCallState.Connecting
         Log.i("TwilioReceiverSession", "connecting to room=${credentials.roomName}")
@@ -65,9 +92,25 @@ class TwilioReceiverSession(
             val frontCameraId = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
                 ?: enumerator.deviceNames.firstOrNull()
 
+            cameraId = frontCameraId
             if (frontCameraId != null) {
                 val cameraCapturer = CameraCapturer(context, frontCameraId)
-                localVideoTrack = LocalVideoTrack.create(context, true, cameraCapturer)
+                localVideoTrack = LocalVideoTrack.create(context, isCameraEnabled, cameraCapturer)
+            }
+            // Own-camera preview, published as soon as the track exists so the
+            // in-call screen can show it immediately.
+            localVideoTrack?.let { track ->
+                // applyZOrder(true): the preview is a SurfaceView drawn on top of
+                // the full-screen kiosk video (also a SurfaceView). Without it
+                // Android may draw the preview *behind* the remote video, so
+                // the resident never saw their own camera.
+                val preview = VideoView(context).apply {
+                    mirror = true
+                    applyZOrder(true)
+                }
+                track.addSink(preview)
+                localPreview = preview
+                _localView.value = preview
             }
 
             val builder = ConnectOptions.Builder(credentials.accessToken)
@@ -75,6 +118,8 @@ class TwilioReceiverSession(
 
             localAudioTrack?.let { builder.audioTracks(listOf(it)) }
             localVideoTrack?.let { builder.videoTracks(listOf(it)) }
+            localDataTrack = LocalDataTrack.create(context)
+            localDataTrack?.let { builder.dataTracks(listOf(it)) }
 
             val connectOptions = builder.build()
 
@@ -110,7 +155,9 @@ class TwilioReceiverSession(
 
                 override fun onDataTrackPublished(participant: RemoteParticipant, publication: RemoteDataTrackPublication) {}
                 override fun onDataTrackUnpublished(participant: RemoteParticipant, publication: RemoteDataTrackPublication) {}
-                override fun onDataTrackSubscribed(participant: RemoteParticipant, publication: RemoteDataTrackPublication, dataTrack: RemoteDataTrack) {}
+                override fun onDataTrackSubscribed(participant: RemoteParticipant, publication: RemoteDataTrackPublication, dataTrack: RemoteDataTrack) {
+                    dataTrack.setListener(dataListener)
+                }
                 override fun onDataTrackSubscriptionFailed(participant: RemoteParticipant, publication: RemoteDataTrackPublication, twilioException: TwilioException) {}
                 override fun onDataTrackUnsubscribed(participant: RemoteParticipant, publication: RemoteDataTrackPublication, dataTrack: RemoteDataTrack) {}
 
@@ -131,6 +178,9 @@ class TwilioReceiverSession(
                     if (publication.isTrackSubscribed) {
                         publication.remoteAudioTrack?.enablePlayback(true)
                     }
+                }
+                participant.remoteDataTracks.forEach { publication ->
+                    publication.remoteDataTrack?.setListener(dataListener)
                 }
             }
 
@@ -226,11 +276,50 @@ class TwilioReceiverSession(
         }
     }
 
-    override fun createLocalView(context: Context): View? {
-        val track = localVideoTrack ?: return null
-        val view = VideoView(context).apply { mirror = true }
-        track.addSink(view)
-        return view
+    override fun createLocalView(context: Context): View? = _localView.value
+
+    override fun onAppBackgrounded() {
+        if (torndown) return
+        backgrounded = true
+        // Tell the kiosk our video is off (it shows a "camera off" placeholder)
+        // rather than leaving the visitor looking at a frozen frame.
+        localVideoTrack?.enable(false)
+        Log.i("TwilioReceiverSession", "app backgrounded — local video paused")
+    }
+
+    override fun onAppForegrounded() {
+        if (torndown || !backgrounded) return
+        backgrounded = false
+        restartCamera(attempt = 1)
+    }
+
+    /**
+     * Android closed our camera while the screen was off; a WebRTC capturer
+     * does not recover from that by itself. Build a fresh capturer + track and
+     * republish it in the same room.
+     */
+    private fun restartCamera(attempt: Int) {
+        val r = room ?: return
+        val id = cameraId ?: return
+        try {
+            localVideoTrack?.let { old ->
+                localPreview?.let { old.removeSink(it) }
+                runCatching { r.localParticipant?.unpublishTrack(old) }
+                old.release()
+            }
+            localVideoTrack = null
+
+            val track = LocalVideoTrack.create(context, isCameraEnabled, CameraCapturer(context, id))
+                ?: throw IllegalStateException("LocalVideoTrack.create returned null")
+            localVideoTrack = track
+            r.localParticipant?.publishTrack(track)
+            localPreview?.let { track.addSink(it) }
+            Log.i("TwilioReceiverSession", "camera restarted after resume (attempt $attempt)")
+        } catch (t: Throwable) {
+            Log.w("TwilioReceiverSession", "camera restart failed (attempt $attempt): ${t.message}")
+            // Right after unlocking, the camera can still be busy for a moment.
+            if (attempt < 3) mainHandler.postDelayed({ if (!torndown) restartCamera(attempt + 1) }, 700L)
+        }
     }
 
     override fun setMicrophoneEnabled(enabled: Boolean) {
@@ -266,7 +355,12 @@ class TwilioReceiverSession(
 
         localAudioTrack?.release()
         localAudioTrack = null
+        runCatching { localDataTrack?.release() }
+        localDataTrack = null
+        localVideoTrack?.let { t -> localPreview?.let { t.removeSink(it) } }
         localVideoTrack?.release()
         localVideoTrack = null
+        localPreview = null
+        _localView.value = null
     }
 }

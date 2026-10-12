@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,11 +35,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -95,30 +99,41 @@ fun InCallScreen(
             }
         }
 
-        // 2. Local Resident Preview Thumbnail (Top Right)
-        // Keyed on remoteView too: the Vonage publisher is only created after the
-        // session connects, so on first composition this was always null and
-        // the local preview never appeared.
-        val localView = remember(isCameraOff, remoteView) {
-            if (!isCameraOff) controller.createLocalView(context) else null
-        }
-
-        if (localView != null) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 48.dp, end = 20.dp)
-                    .size(width = 100.dp, height = 150.dp)
-                    .align(Alignment.TopEnd)
-                    .clip(RoundedCornerShape(16.dp))
-                    .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                    .background(Color.DarkGray)
-            ) {
-                AndroidView(
-                    factory = {
-                        (localView.parent as? ViewGroup)?.removeView(localView)
-                        localView
-                    },
-                    modifier = Modifier.fillMaxSize()
+        // 2. Own camera preview (top right). Observed from the controller so it
+        // appears as soon as the camera starts — it used to be fetched once,
+        // before the camera existed, and stayed empty for the whole call.
+        val localView by controller.localView.collectAsState()
+        Box(
+            modifier = Modifier
+                .padding(top = 48.dp, end = 20.dp)
+                .size(width = 100.dp, height = 150.dp)
+                .align(Alignment.TopEnd)
+                .clip(RoundedCornerShape(16.dp))
+                .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .background(Color(0xFF2C2C2E)),
+            contentAlignment = Alignment.Center
+        ) {
+            val preview = localView
+            when {
+                isCameraOff -> Icon(
+                    imageVector = Icons.Rounded.VideocamOff,
+                    contentDescription = "Your camera is off",
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(32.dp)
+                )
+                preview != null -> key(preview) {
+                    AndroidView(
+                        factory = {
+                            (preview.parent as? ViewGroup)?.removeView(preview)
+                            preview
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> Text(
+                    text = "Starting camera…",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp
                 )
             }
         }
@@ -167,8 +182,12 @@ fun InCallScreen(
                 .align(Alignment.Center)
                 .padding(horizontal = 32.dp)
         ) {
+            val unlockFailed = gateUnlockedMessage?.let {
+                it.startsWith("Couldn't") || it.startsWith("The gate didn't")
+            } == true
             Surface(
-                color = Color(0xFF2E7D32),
+                // green = unlocking / unlocked, red = kiosk reported failure
+                color = if (unlockFailed) Color(0xFFC62828) else Color(0xFF2E7D32),
                 shape = RoundedCornerShape(16.dp),
                 shadowElevation = 10.dp
             ) {
@@ -193,37 +212,71 @@ fun InCallScreen(
             }
         }
 
-        // 5. Control Action Bar (Bottom)
+        // 5. Control Action Bar (Bottom) on a dark fade for legibility
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(bottom = 36.dp, start = 20.dp, end = 20.dp),
+                .background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))
+                )
+                .padding(top = 40.dp, bottom = 36.dp, start = 20.dp, end = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Unlock Door Action Button
-            Button(
-                onClick = { controller.unlockGate() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.LockOpen,
-                    contentDescription = "Unlock Gate",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "UNLOCK GATE",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    letterSpacing = 1.sp
-                )
+            // Gate actions — only once the call is really up and the kiosk's
+            // video is on screen. Solid, high-contrast buttons so they read
+            // clearly on top of any video.
+            AnimatedVisibility(visible = remoteView != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Open Gate (call continues): white button, green content
+                    Button(
+                        onClick = { controller.openGate(endCall = false) },
+                        shape = RoundedCornerShape(28.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF1B5E20)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(58.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.LockOpen,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Gate", fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
+                    }
+
+                    // Open Gate & End Call: solid green, white content
+                    Button(
+                        onClick = { controller.openGate(endCall = true) },
+                        shape = RoundedCornerShape(28.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(58.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.LockOpen,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Open & End Call", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

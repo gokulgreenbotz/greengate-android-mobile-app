@@ -16,12 +16,16 @@ import com.opentok.android.Session
 import com.opentok.android.Stream
 import com.opentok.android.Subscriber
 import com.opentok.android.SubscriberKit
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 private const val TAG = "VonageReceiverSession"
 private const val KIOSK_STREAM_NAME = "GreenGate Kiosk"
+/** Must match the kiosk app's signal type. */
+private const val APP_SIGNAL_TYPE = "gg"
 
 class VonageReceiverSession(
     private val context: Context,
@@ -39,6 +43,29 @@ class VonageReceiverSession(
     private var subscriber: Subscriber? = null
 
     private var firstFrameLogged = false
+
+    private val _localView = MutableStateFlow<View?>(null)
+    override val localView: StateFlow<View?> = _localView.asStateFlow()
+
+    /** In-call message channel to the kiosk (Vonage signals). */
+    private val _appMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    override val appMessages: SharedFlow<String> = _appMessages
+    @Volatile private var sessionConnected = false
+
+    private val signalListener = Session.SignalListener { s, type, data, connection ->
+        // Vonage also delivers our own signals back to us — skip those.
+        val fromSelf = connection != null && connection.connectionId == s.connection?.connectionId
+        if (type == APP_SIGNAL_TYPE && !fromSelf && data != null) {
+            Log.d(TAG, "in-call message: $data")
+            _appMessages.tryEmit(data)
+        }
+    }
+
+    override fun sendAppMessage(message: String): Boolean {
+        val s = session ?: return false
+        if (!sessionConnected) return false
+        return runCatching { s.sendSignal(APP_SIGNAL_TYPE, message) }.isSuccess
+    }
 
     private var isMicEnabled = true
     private var isCameraEnabled = true
@@ -63,6 +90,7 @@ class VonageReceiverSession(
             session = Session.Builder(context, credentials.apiKey, credentials.sessionId).build()
             session?.setSessionListener(object : Session.SessionListener {
                 override fun onConnected(session: Session) {
+                    sessionConnected = true
                     _state.value = ReceiverCallState.Connected(System.currentTimeMillis())
 
                     try {
@@ -83,6 +111,7 @@ class VonageReceiverSession(
                             (view as? GLSurfaceView)?.setZOrderMediaOverlay(true)
                         }
                         session.publish(publisher)
+                        _localView.value = publisher?.view
                     } catch (e: Exception) {
                         Log.e("VonageReceiverSession", "Failed to build publisher", e)
                     }
@@ -177,6 +206,14 @@ class VonageReceiverSession(
                         session.unsubscribe(subscriber)
                         subscriber = null
                         _remoteView.value = null
+                        // FIX: the kiosk left the call. Before, the phone only
+                        // blanked the video and stayed "in call" until the slow
+                        // relay message arrived. End it now.
+                        if (!_state.value.isTerminal) {
+                            Log.i(TAG, "kiosk stream dropped — ending call")
+                            _state.value = ReceiverCallState.Ended(EndReason.REMOTE_HANGUP)
+                            release()
+                        }
                     }
                 }
 
@@ -186,6 +223,7 @@ class VonageReceiverSession(
                 }
             })
 
+            session?.setSignalListener(signalListener)
             session?.connect(credentials.token)
         } catch (e: Exception) {
             Log.e("VonageReceiverSession", "Exception connecting Vonage session", e)
@@ -196,6 +234,20 @@ class VonageReceiverSession(
 
     override fun createLocalView(context: Context): View? {
         return publisher?.view
+    }
+
+    // Vonage's documented lifecycle hooks: pause/resume the publisher's
+    // camera and the subscriber renderers. Without onResume() the camera that
+    // Android closed while the screen was off never comes back (black video).
+    override fun onAppBackgrounded() {
+        runCatching { session?.onPause() }
+            .onFailure { Log.w(TAG, "session.onPause failed", it) }
+    }
+
+    override fun onAppForegrounded() {
+        runCatching { session?.onResume() }
+            .onFailure { Log.w(TAG, "session.onResume failed", it) }
+        publisher?.publishVideo = isCameraEnabled
     }
 
     override fun setMicrophoneEnabled(enabled: Boolean) {
@@ -232,6 +284,8 @@ class VonageReceiverSession(
             session?.disconnect()
             session = null
         }
+        sessionConnected = false
+        _localView.value = null
         _remoteView.value = null
     }
 }

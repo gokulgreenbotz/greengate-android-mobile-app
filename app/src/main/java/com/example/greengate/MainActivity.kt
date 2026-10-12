@@ -68,7 +68,19 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    override fun onStart() {
+        super.onStart()
+        com.example.greengate.core.call.signaling.IncomingCallNotifier.appInForeground = true
+        // Screen back on / app reopened during a call: restart the camera.
+        if (::callController.isInitialized) callController.onAppForegrounded()
+    }
 
+    override fun onStop() {
+        com.example.greengate.core.call.signaling.IncomingCallNotifier.appInForeground = false
+        // Power button / home during a call: pause our video cleanly.
+        if (::callController.isInitialized) callController.onAppBackgrounded()
+        super.onStop()
+    }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -201,6 +213,10 @@ fun MainScreen(
         com.example.greengate.core.call.signaling.CallSignalingManager(context.applicationContext, activeController).also { mgr ->
             activeController.onCallEndedSignal = { callId ->
                 mgr.broadcastCallEnded(callId)
+            }
+            // "Unlock Door" in the call screen → ask the kiosk to open the relay.
+            activeController.onOpenGateRequested = { callId, endCall, requestId ->
+                mgr.requestOpenGate(callId, endCall, requestId)
             }
         }
     }

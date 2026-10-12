@@ -46,6 +46,10 @@ class CallSignalingService : Service() {
         const val CHANNEL_ID = "greengate_incoming_calls_channel"
         const val NOTIFICATION_ID = 9999
         const val FOREGROUND_SERVICE_NOTIFICATION_ID = 8888
+        private const val SERVICE_CHANNEL_ID = "greengate_listener_silent"
+        private const val LEGACY_SERVICE_CHANNEL_ID = "greengate_service_channel"
+        /** Incoming-call notification removes itself after this, as a safety net. */
+        private const val INCOMING_NOTIFICATION_TIMEOUT_MS = 45_000L
 
         const val EXTRA_CALL_ID = "extra_call_id"
         const val EXTRA_VISITOR_NAME = "extra_visitor_name"
@@ -92,19 +96,35 @@ class CallSignalingService : Service() {
 
     private fun startForegroundServiceNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "greengate_service_channel",
-                "GreenGate Background Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
             val nm = getSystemService(NotificationManager::class.java)
+            // Android requires a notification for a background listener, but it
+            // can be made as quiet as possible: MIN importance = no sound, no
+            // status-bar icon, no badge, collapsed at the bottom of the shade,
+            // hidden on the lock screen. A NEW channel id is needed because an
+            // existing channel's importance can't be lowered by the app.
+            nm?.deleteNotificationChannel(LEGACY_SERVICE_CHANNEL_ID)
+            val channel = NotificationChannel(
+                SERVICE_CHANNEL_ID,
+                "Background service",
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = "Keeps GreenGate ready to receive gate calls"
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
+            }
             nm?.createNotificationChannel(channel)
 
-            val notification = NotificationCompat.Builder(this, "greengate_service_channel")
-                .setContentTitle("GreenGate Call Listener")
-                .setContentText("Listening for incoming kiosk calls")
+            val notification = NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
+                .setContentTitle("GreenGate")
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .setSilent(true)
+                .setShowWhen(false)
                 .setOngoing(true)
                 .build()
 
@@ -182,6 +202,12 @@ class CallSignalingService : Service() {
                 // whatever the clocks say. The clock check is only used for the
                 // very first poll after the service starts (to avoid re-ringing a
                 // call that was already on the relay before we started).
+                // Kiosk cancelled / call ended while we were ringing in the
+                // background: take the incoming-call notification down.
+                if (event == "CALL_ENDED" && callId.isNotBlank() && callId == lastProcessedCallId) {
+                    IncomingCallNotifier.cancel(this)
+                }
+
                 val isNewCallId = callId.isNotBlank() && callId != lastSeenCallId
                 val firstPoll = !hasBaseline
                 hasBaseline = true
@@ -231,6 +257,13 @@ class CallSignalingService : Service() {
             val vonageToken = vonageObj?.optString("token")?.ifBlank { null }
                 ?: json.optString("token").ifBlank { SharedCallConfig.vonageToken }
 
+            // App is open: the in-app ringing screen (CallSignalingManager)
+            // handles this call. Don't show a notification over it.
+            if (IncomingCallNotifier.appInForeground) {
+                Log.i("CallSignalingService", "App in foreground — skipping incoming-call notification")
+                return
+            }
+
             // 1. Wake up phone CPU and turn screen on
             wakeUpDevice()
 
@@ -264,8 +297,12 @@ class CallSignalingService : Service() {
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setOngoing(true)
+                // Safety net: never leave a stale "incoming call" behind if the
+                // app process is killed before it can cancel the notification.
+                .setTimeoutAfter(INCOMING_NOTIFICATION_TIMEOUT_MS)
                 .build()
 
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
