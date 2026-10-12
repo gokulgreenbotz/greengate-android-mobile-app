@@ -287,7 +287,7 @@ private fun ActionGrid(navController: NavController, onInvite: () -> Unit) {
         icons.withIndex().chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 row.forEach { (index, spec) ->
-                    ActionCard(if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.InviteVisitors.route) "Invite Visitors" else if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.Community.route) "My Community" else spec.title, spec.subtitle, Modifier.weight(1f), spec.color,
+                    ActionCard(if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.InviteVisitors.route) "Pre-Invites" else if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.Community.route) "My Community" else spec.title, spec.subtitle, Modifier.weight(1f), spec.color,
                         onClick = { if (spec.route == Screen.InviteVisitors.route) onInvite() else navController.navigate(spec.route) }) {
                         val active = index == sequence.activeIndex
                         val progress = if (active) sequence.progress.value else 0f

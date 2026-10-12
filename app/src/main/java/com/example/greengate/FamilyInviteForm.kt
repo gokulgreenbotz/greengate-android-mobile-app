@@ -18,35 +18,30 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material.icons.outlined.NotificationsActive
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
@@ -55,12 +50,11 @@ import java.util.TimeZone
 
 private enum class Relationship { Family, Friend, Guest }
 
-private val CountryCodes = listOf("+65", "+60", "+62", "+63", "+66", "+91", "+44", "+1")
 private val ValidityOptions = listOf(1 to "1 Hour", 2 to "2 Hours", 4 to "4 Hours", 8 to "8 Hours", 24 to "Full Day")
 
-private val FieldShape = RoundedCornerShape(16.dp)
-private val FieldBorder = Color(0xFFE3ECE9)
-private val ErrorRed = Color(0xFFC2412D)
+// Fields come from InviteFields.kt; these style the relationship chips.
+private val ChipShape = RoundedCornerShape(14.dp)
+private val SelectedFill = Color(0xFFE7F6F0)
 
 private enum class InvitePage { BASIC, OPTIONS, REVIEW }
 
@@ -81,7 +75,7 @@ private fun startTimesFor(day: BookingDay): List<Int> {
 @Composable
 internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated: (VisitorInvite) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
-    var countryCode by rememberSaveable { mutableStateOf(CountryCodes.first()) }
+    var countryCode by rememberSaveable { mutableStateOf(InviteCountryCodes.first()) }
     var mobile by rememberSaveable { mutableStateOf("") }
     var relationship by rememberSaveable { mutableStateOf(Relationship.Family) }
     var dayKey by rememberSaveable { mutableStateOf(BookingDay.today().let { listOf(it.year, it.month, it.day) }) }
@@ -125,26 +119,28 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
         pickDate = false
     }
 
-    Column(Modifier.fillMaxWidth().imePadding()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         InviteFormHeader(
             title = when (page) {
                 InvitePage.BASIC -> InviteType.FAMILY.title
                 InvitePage.OPTIONS -> "Additional Options"
-                InvitePage.REVIEW -> "Review Invite"
+                InvitePage.REVIEW -> null
             },
             subtitle = when (page) {
                 InvitePage.BASIC -> "Create an invite for people you know"
                 InvitePage.OPTIONS -> "Vehicle, entry and recurring settings"
-                InvitePage.REVIEW -> "Check the details before creating it"
+                InvitePage.REVIEW -> null
             },
             onBack = if (page == InvitePage.BASIC) null else ({ back() }),
             onClose = onClose,
-        ) {
-            Box(Modifier.size(60.dp)) {
-                Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(56.dp))
-                Image(painterResource(R.drawable.ic_clay_community_heart), null, Modifier.align(Alignment.BottomEnd).size(28.dp))
-            }
-        }
+            // The review page shows the invite's own avatar, so it skips the header art.
+            art = if (page == InvitePage.REVIEW) null else ({
+                Box(Modifier.size(60.dp)) {
+                    Image(painterResource(R.drawable.ic_clay_community_man), null, Modifier.size(56.dp))
+                    Image(painterResource(R.drawable.ic_clay_community_heart), null, Modifier.align(Alignment.BottomEnd).size(28.dp))
+                }
+            }),
+        )
         Spacer(Modifier.height(6.dp))
         AnimatedContent(
             targetState = page,
@@ -152,7 +148,7 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
                 val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
                 (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
             },
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f),
             label = "invitePage"
         ) { shown ->
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -160,42 +156,32 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
                     InvitePage.OPTIONS -> AdditionalOptions(relationship, { relationship = it }, options) { options = it }
                     InvitePage.REVIEW -> InviteReview(draft(), options)
                     InvitePage.BASIC -> {
-                        FieldLabel("Visitor Name *")
-                        InputField(name, { name = it.take(60) }, "e.g. John Lim", nameError,
+                        InviteLabel("Name")
+                        InviteTextField(Icons.Outlined.Person, name, { name = it.take(60) }, "e.g. John Lim", nameError,
                             KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
-                        FieldLabel("Mobile Number *")
+                        InviteLabel("Mobile Number")
+                        InviteMobileField(countryCode, { countryCode = it }, mobile,
+                            { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, mobileError)
+                        InviteLabel("Date")
+                        InviteDateField(day) { pickDate = true }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            DropdownField(countryCode, CountryCodes, { countryCode = it }, Modifier.width(96.dp))
-                            InputField(mobile, { mobile = it.filter { c -> c.isDigit() || c == ' ' }.take(18) }, "8123 4567",
-                                mobileError, KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done), Modifier.weight(1f))
-                        }
-                        FieldLabel("When")
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                Modifier.weight(1.2f).height(54.dp).clip(FieldShape).background(Color.White)
-                                    .border(1.dp, FieldBorder, FieldShape).clickable(role = Role.Button) { pickDate = true }
-                                    .padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(dayLabel(day), Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk, maxLines = 1)
-                                Icon(Icons.Outlined.CalendarMonth, "Choose date", tint = FacilityInk, modifier = Modifier.size(22.dp))
+                            Column(Modifier.weight(1f)) {
+                                InviteLabel("Start Time")
+                                InviteDropdown(Icons.Outlined.Schedule, clockLabel(startMinutes), startTimes.map { clockLabel(it) }) {
+                                    startMinutes = startTimes[it]
+                                }
                             }
-                            DropdownField(clockLabel(startMinutes), startTimes.map { clockLabel(it) },
-                                { label -> startMinutes = startTimes.first { clockLabel(it) == label } }, Modifier.weight(1f))
+                            Column(Modifier.weight(1f)) {
+                                InviteLabel("Valid for")
+                                InviteDropdown(Icons.Outlined.Schedule, ValidityOptions.first { it.first == validHours }.second,
+                                    ValidityOptions.map { it.second }) { validHours = ValidityOptions[it].first }
+                            }
                         }
-                        FieldLabel("Valid for")
-                        DropdownField(
-                            ValidityOptions.first { it.first == validHours }.second, ValidityOptions.map { it.second },
-                            { label -> validHours = ValidityOptions.first { it.second == label }.first }, Modifier.fillMaxWidth()
-                        )
-                        Row(
-                            Modifier.padding(top = 18.dp).clip(RoundedCornerShape(8.dp))
-                                .clickable(role = Role.Button) { page = InvitePage.OPTIONS }.padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Advanced options", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-                            Icon(Icons.Rounded.ChevronRight, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
-                        }
+                        Text("Advanced options »",
+                            Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp).clip(RoundedCornerShape(6.dp))
+                                .clickable(role = Role.Button) { page = InvitePage.OPTIONS }.padding(6.dp),
+                            fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = BookingsDeepGreen,
+                            textDecoration = TextDecoration.Underline)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -279,7 +265,7 @@ private fun AdditionalOptions(
     relationship: Relationship, onRelationshipChange: (Relationship) -> Unit,
     options: InviteOptions, onChange: (InviteOptions) -> Unit
 ) {
-    FieldLabel("Relationship")
+    InviteLabel("Relationship")
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Relationship.entries.forEach { r ->
             RelationshipChip(r.name, relationship == r, Modifier.weight(1f)) { onRelationshipChange(r) }
@@ -290,8 +276,9 @@ private fun AdditionalOptions(
         OptionToggle(null, "Allow vehicle number (optional)", null, options.vehicleAllowed) { onChange(options.copy(vehicleAllowed = it)) }
         AnimatedVisibility(options.vehicleAllowed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DropdownField(options.plateRegion, PlateRegions, { onChange(options.copy(plateRegion = it)) }, Modifier.width(100.dp))
-                InputField(options.vehicle, { onChange(options.copy(vehicle = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' }.take(12))) },
+                InviteDropdown(null, options.plateRegion, PlateRegions, Modifier.width(100.dp)) { onChange(options.copy(plateRegion = PlateRegions[it])) }
+                InviteTextField(Icons.Outlined.DirectionsCar, options.vehicle,
+                    { onChange(options.copy(vehicle = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' }.take(12))) },
                     "SMC 1234A", null,
                     KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done), Modifier.weight(1f))
             }
@@ -307,15 +294,15 @@ private fun AdditionalOptions(
         AnimatedVisibility(options.recurring, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(Modifier.padding(bottom = 6.dp)) {
                 Text("Repeats", Modifier.padding(bottom = 6.dp), fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-                DropdownField(options.repeat, RepeatOptions, { onChange(options.copy(repeat = it)) }, Modifier.fillMaxWidth())
+                InviteDropdown(Icons.Outlined.EventRepeat, options.repeat, RepeatOptions) { onChange(options.copy(repeat = RepeatOptions[it])) }
             }
         }
         OptionDivider()
         OptionToggle(Icons.Outlined.NotificationsActive, "Notify me on entry", null, options.notifyOnEntry) { onChange(options.copy(notifyOnEntry = it)) }
-        FieldLabel("Maximum entries")
-        DropdownField(options.maxEntries, MaxEntryOptions, { onChange(options.copy(maxEntries = it)) }, Modifier.fillMaxWidth())
-        FieldLabel("Notes (Optional)")
-        InputField(options.note, { onChange(options.copy(note = it.take(120))) }, "e.g. visiting for family gathering", null,
+        InviteLabel("Maximum entries")
+        InviteDropdown(Icons.Rounded.Repeat, options.maxEntries, MaxEntryOptions) { onChange(options.copy(maxEntries = MaxEntryOptions[it])) }
+        InviteLabel("Notes (Optional)")
+        InviteTextField(null, options.note, { onChange(options.copy(note = it.take(120))) }, "e.g. visiting for family gathering", null,
             KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
     }
 }
@@ -347,86 +334,18 @@ private fun OptionToggle(icon: ImageVector?, title: String, subtitle: String?, c
 @Composable
 private fun OptionDivider() = HorizontalDivider(color = BookingsDivider)
 
-private fun dayLabel(day: BookingDay): String {
-    val today = BookingDay.today()
-    val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 1) }
-        .let { BookingDay(it.get(Calendar.YEAR), it.get(Calendar.MONTH), it.get(Calendar.DAY_OF_MONTH)) }
-    return when (day) {
-        today -> "Today"
-        tomorrow -> "Tomorrow"
-        else -> "${day.label()} ${day.year}"
-    }
-}
-
-@Composable
-private fun FieldLabel(text: String) {
-    Text(text, Modifier.padding(top = 16.dp, bottom = 8.dp), fontFamily = DMSans, fontSize = 15.sp,
-        fontWeight = FontWeight.SemiBold, color = FacilityInk)
-}
-
-/** Text input shared by the invite forms (Family / Friend and Delivery). */
-@Composable
-internal fun InputField(
-    value: String, onValueChange: (String) -> Unit, placeholder: String, error: String?,
-    keyboardOptions: KeyboardOptions, modifier: Modifier = Modifier
-) {
-    Column(modifier) {
-        Box(
-            Modifier.fillMaxWidth().height(54.dp).clip(FieldShape).background(Color.White)
-                .border(if (error != null) 1.5.dp else 1.dp, if (error != null) ErrorRed else FieldBorder, FieldShape)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            if (value.isEmpty()) Text(placeholder, fontFamily = DMSans, fontSize = 16.sp, color = FacilityMuted.copy(alpha = .6f))
-            BasicTextField(
-                value, onValueChange, Modifier.fillMaxWidth(), singleLine = true,
-                textStyle = TextStyle(fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk),
-                cursorBrush = SolidColor(BookingsDeepGreen), keyboardOptions = keyboardOptions
-            )
-        }
-        if (error != null) Text(error, Modifier.padding(start = 4.dp, top = 4.dp), fontFamily = DMSans, fontSize = 12.sp, color = ErrorRed)
-    }
-}
-
-@Composable
-private fun DropdownField(value: String, options: List<String>, onSelect: (String) -> Unit, modifier: Modifier) {
-    var open by remember { mutableStateOf(false) }
-    Box(modifier) {
-        Row(
-            Modifier.fillMaxWidth().height(54.dp).clip(FieldShape).background(Color.White)
-                .border(1.dp, FieldBorder, FieldShape).clickable(role = Role.DropdownList) { open = true }
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(value, Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, color = FacilityInk)
-            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option, fontFamily = DMSans, fontWeight = if (option == value) FontWeight.SemiBold else FontWeight.Normal) },
-                    onClick = { onSelect(option); open = false }
-                )
-            }
-        }
-    }
-}
-
+/** Styled like Invite Cab's Pickup / Drop chips. */
 @Composable
 private fun RelationshipChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
     Box(
-        modifier.height(50.dp)
-            .then(if (selected) Modifier.shadow(6.dp, shape, ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54)) else Modifier)
-            .clip(shape)
-            .background(if (selected) Brush.verticalGradient(listOf(Color(0xFF1D8A6A), BookingsDeepGreen))
-                else Brush.linearGradient(listOf(Color.White, Color.White)))
-            .border(1.dp, if (selected) BookingsDeepGreen else FieldBorder, shape)
+        modifier.height(50.dp).clip(ChipShape)
+            .background(if (selected) SelectedFill else Color.White)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else InviteFieldBorder, ChipShape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) Color.White else FacilityInk)
+            color = FacilityInk)
     }
 }
 
