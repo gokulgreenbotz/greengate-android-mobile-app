@@ -442,7 +442,9 @@ private fun Bundle?.bookingArgs(): BookingArgs? {
 }
 
 fun isMainTab(route: String?): Boolean {
-    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Services.route, Screen.Access.route, Screen.Profile.route)
+    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Services.route, Screen.Access.route, Screen.Profile.route) ||
+        // Theme 3's bottom bar has an Updates tab that opens announcements.
+        (AppPreferences.theme == AppTheme.THREE && route == Screen.Announcements.route)
 }
 
 @Composable

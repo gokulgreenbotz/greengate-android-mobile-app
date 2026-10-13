@@ -152,6 +152,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                             AppTheme.ZERO -> "Theme 0 - Glass"
                             AppTheme.ONE -> "Theme 1 - Classic"
                             AppTheme.TWO -> "Theme 2 - Fresh"
+                            AppTheme.THREE -> "Theme 3 - Meadow"
                         }
                         Row(Modifier.fillMaxWidth().selectable(
                             selected = AppPreferences.theme == theme,

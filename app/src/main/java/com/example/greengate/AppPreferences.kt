@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 enum class IconSet { ZERO, CLAY, TWO, THREE }
-enum class AppTheme { ZERO, ONE, TWO }
+enum class AppTheme { ZERO, ONE, TWO, THREE }
 
 private const val PREFS_NAME = "greengate_prefs"
 private const val KEY_ICON_SET = "icon_set"

@@ -98,6 +98,10 @@ fun HomeScreen(navController: NavController) {
         ThemeTwoHomeScreen(navController)
         return
     }
+    if (AppPreferences.theme == AppTheme.THREE) {
+        ThemeThreeHomeScreen(navController)
+        return
+    }
     var showSos by remember { mutableStateOf(false) }
     var showInvite by remember { mutableStateOf(false) }
     if (showInvite) CreateInviteSheet(
@@ -560,6 +564,10 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
     }
     if (AppPreferences.theme == AppTheme.TWO) {
         ThemeTwoBottomNavigation(navController, currentRoute)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.THREE) {
+        ThemeThreeBottomNavigation(navController, currentRoute)
         return
     }
     fun navigate(route: String) {

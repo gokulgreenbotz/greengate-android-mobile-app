@@ -37,6 +37,15 @@ private val FreshColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF6B7A73)
 )
 
+// Theme 3 - Meadow: white cards on an off-white page, deep forest green with lime highlights.
+private val MeadowColorScheme = lightColorScheme(
+    primary = Color(0xFF0E3B2C), secondary = Color(0xFF3F6B57), tertiary = Color(0xFFC6E04A),
+    background = Color(0xFFF8F9F5), surface = Color.White, surfaceVariant = Color(0xFFF0F8D8),
+    onPrimary = Color.White, onSecondary = Color.White, onTertiary = Color(0xFF0E3B2C),
+    onBackground = Color(0xFF0E3B2C), onSurface = Color(0xFF0E3B2C),
+    onSurfaceVariant = Color(0xFF6E7A72)
+)
+
 @Composable
 fun GreenGateTheme(content: @Composable () -> Unit) {
     MaterialTheme(
@@ -44,6 +53,7 @@ fun GreenGateTheme(content: @Composable () -> Unit) {
             com.example.greengate.AppTheme.ZERO -> GlassColorScheme
             com.example.greengate.AppTheme.ONE -> LightColorScheme
             com.example.greengate.AppTheme.TWO -> FreshColorScheme
+            com.example.greengate.AppTheme.THREE -> MeadowColorScheme
         },
         typography = Typography, content = content
     )
