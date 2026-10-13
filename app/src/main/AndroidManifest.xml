@@ -29,6 +29,7 @@
     </queries>
 
     <application
+        android:name=".GreenGateApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -54,14 +55,14 @@
         </activity>
 
         <service
-            android:name=".core.call.signaling.CallSignalingService"
+            android:name=".core.push.CallSignalingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="phoneCall|dataSync|specialUse"
             tools:ignore="ForegroundServicePermission" />
 
         <receiver
-            android:name=".core.call.signaling.BootReceiver"
+            android:name=".core.push.BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
