@@ -47,6 +47,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.ui.navigation.BottomNavigationBar
@@ -177,10 +178,10 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                     // The art has its own ring and status dot around a photo disc centred at (50, 51)
                     // px; crop inside that disc so the button's circle is the only one.
                     MarinaArt(R.drawable.marina_profile_avatar_reference, Modifier.fillMaxSize().padding(2.dp).clip(CircleShape),
-                        crop = intArrayOf(16, 17, 68, 68), description = "Alex's profile", scale = ContentScale.Crop)
+                        crop = intArrayOf(16, 17, 68, 68), description = "${ResidentSession.firstName}'s profile", scale = ContentScale.Crop)
                 }
             }
-            Text("Good Morning, Alex", fontFamily = DMSans, fontSize = 24.sp,
+            Text("Good Morning, ${ResidentSession.firstName}", fontFamily = DMSans, fontSize = 24.sp,
                 lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = MarinaInk)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Marina Bay Residences", fontFamily = DMSans, fontSize = 13.sp,

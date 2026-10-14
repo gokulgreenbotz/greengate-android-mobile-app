@@ -14,7 +14,9 @@ const val MOBILE_API_PATH = "api/db/resident-app"
 /** Onboarding service deployments the app can sign in against. Chosen in Profile. */
 enum class ApiEnvironment(val label: String, val baseUrl: String) {
     STAGE("Stage", "https://client-onboarding.up.railway.app"),
-    PROD("Production", "https://onboarding.gbotz.site");
+    PROD("Production", "https://onboarding.gbotz.site"),
+    /** The Android emulator's alias for the host machine's backend (`npm run dev:data`, port 5176). */
+    LOCAL("Local", "http://10.0.2.2:5176");
 
     val apiUrl get() = "$baseUrl/$MOBILE_API_PATH"
 }
@@ -69,6 +71,11 @@ internal class ResidentAuthApi(apiUrl: String) {
 
     fun logout(accessToken: String) {
         execute(request("/auth/logout", accessToken).post(EmptyJson).build())
+    }
+
+    /** Registers this device's FCM token on the signed-in session, so the office can send it push notifications. */
+    fun registerFcmToken(accessToken: String, fcmToken: String) {
+        execute(request("/device/fcm-token", accessToken).put(JSONObject().put("fcmToken", fcmToken).toString().toRequestBody(JsonType)).build())
     }
 
     private fun post(path: String, body: JSONObject) =

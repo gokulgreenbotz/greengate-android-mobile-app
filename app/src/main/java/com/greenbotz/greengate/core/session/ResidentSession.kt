@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.greenbotz.greengate.BuildConfig
+import com.greenbotz.greengate.core.push.currentPushToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +35,13 @@ object ResidentSession {
 
     var state by mutableStateOf<State>(State.Restoring)
         private set
+
+    /** First name shown in greetings: the signed-in resident's, "Alex" for the demo account. */
+    val firstName: String
+        get() = when (val s = state) {
+            is State.SignedIn -> s.households.firstOrNull()?.name?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: "there"
+            else -> "Alex"
+        }
 
     /** Server the app signs in against. Debug builds start on Stage, release builds on Production. */
     var environment by mutableStateOf(if (BuildConfig.DEBUG) ApiEnvironment.STAGE else ApiEnvironment.PROD)
@@ -70,6 +78,22 @@ object ResidentSession {
             // Offline or a server error: keep the sign-in and let the next call retry.
             if (e.code in SessionEndedCodes) State.SignedOut else State.SignedIn(emptyList())
         }
+        registerPush()
+    }
+
+    /**
+     * Gives the server this phone's FCM token so the office can send it notifications.
+     * Best effort: a failure here never affects sign-in. [fcmToken] is the new token
+     * from onNewToken; without it the current one is fetched.
+     */
+    suspend fun registerPush(fcmToken: String? = null) {
+        if (state !is State.SignedIn) return
+        try {
+            val token = fcmToken ?: currentPushToken() ?: return
+            authorized { access -> api.registerFcmToken(access, token) }
+        } catch (_: Exception) {
+            // Offline, or Firebase not ready: retried on the next launch or token refresh.
+        }
     }
 
     /** Asks for an SMS code. [phone] includes the country code. Returns seconds until "Resend" is allowed. */
@@ -80,6 +104,7 @@ object ResidentSession {
         io { store.refreshToken = tokens.refreshToken }
         accessToken = tokens.accessToken
         state = State.SignedIn(households)
+        registerPush()
     }
 
     fun startDemo() {

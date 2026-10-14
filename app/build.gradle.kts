@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -61,6 +62,10 @@ dependencies {
     // Real-time Call Signaling dependencies
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+
+    // Push notifications (FCM)
+    implementation(platform("com.google.firebase:firebase-bom:35.0.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     // Booking QR codes
     implementation("com.google.zxing:core:3.5.3")

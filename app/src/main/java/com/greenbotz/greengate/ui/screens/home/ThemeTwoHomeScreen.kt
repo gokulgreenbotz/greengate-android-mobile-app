@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.Facilities
 import com.greenbotz.greengate.ui.screens.sos.SosScreen
@@ -173,7 +174,7 @@ private fun FreshGreeting(s: Float) {
             Text("GOOD MORNING", color = FreshMuted, fontFamily = DMSans, fontSize = 10.5f.t(s), letterSpacing = 2.6f.t(s),
                 fontWeight = FontWeight.Medium)
             // The leaf rides inline so it stays beside "Alex" when the name wraps.
-            Text(buildAnnotatedString { append("Good Morning, Alex "); appendInlineContent("leaf") },
+            Text(buildAnnotatedString { append("Good Morning, ${ResidentSession.firstName} "); appendInlineContent("leaf") },
                 Modifier.padding(top = 4.u(s)), color = FreshInk, fontFamily = PlayfairDisplay,
                 fontWeight = FontWeight.Bold, fontSize = 22.t(s), lineHeight = 28.t(s),
                 inlineContent = mapOf("leaf" to InlineTextContent(Placeholder(20.t(s), 20.t(s), PlaceholderVerticalAlign.TextCenter)) {

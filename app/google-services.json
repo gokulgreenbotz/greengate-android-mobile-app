@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1078298473788",
+    "project_id": "greengate-dc9f7",
+    "storage_bucket": "greengate-dc9f7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1078298473788:android:9e9c83bb132825aacf5a39",
+        "android_client_info": {
+          "package_name": "com.greenbotz.greengate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8QAeydjmF86dKvvSJd8rasUQ8w1tAmAo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -50,6 +50,7 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.Facility
@@ -151,7 +152,7 @@ private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () 
             Column(Modifier.weight(1f)) {
                 Text("Good Morning,", color = Color.White, fontFamily = DMSans, fontSize = 16.t(s), lineHeight = 20.t(s), fontWeight = FontWeight.Medium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Alex", color = Color.White, fontFamily = DMSans, fontSize = 30.t(s), lineHeight = 34.t(s), fontWeight = FontWeight.SemiBold)
+                    Text(ResidentSession.firstName, color = Color.White, fontFamily = DMSans, fontSize = 30.t(s), lineHeight = 34.t(s), fontWeight = FontWeight.SemiBold)
                     Image(painterResource(R.drawable.gg_leaf_accent), null, Modifier.padding(start = 2.u(s)).size(28.u(s)))
                 }
             }

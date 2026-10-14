@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.Facility
 import com.greenbotz.greengate.ui.screens.sos.SosScreen
@@ -162,7 +163,7 @@ private fun MeadowGreeting(s: Float) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 10.u(s))) {
             Text("Good morning,", color = MeadowMuted, fontFamily = DMSans, fontSize = 17.t(s), lineHeight = 22.t(s))
-            Text("Alex", color = MeadowInk, fontFamily = DMSans, fontWeight = FontWeight.Bold,
+            Text(ResidentSession.firstName, color = MeadowInk, fontFamily = DMSans, fontWeight = FontWeight.Bold,
                 fontSize = 38.t(s), lineHeight = 44.t(s), letterSpacing = (-.5f).t(s), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Surface(shape = RoundedCornerShape(20.u(s)), color = Color(0xFFEAF4EC)) {
