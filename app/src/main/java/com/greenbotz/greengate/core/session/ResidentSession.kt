@@ -35,13 +35,30 @@ object ResidentSession {
     var state by mutableStateOf<State>(State.Restoring)
         private set
 
+    /** Server the app signs in against. Debug builds start on Stage, release builds on Production. */
+    var environment by mutableStateOf(if (BuildConfig.DEBUG) ApiEnvironment.STAGE else ApiEnvironment.PROD)
+        private set
+
     private lateinit var store: SessionStore
-    private val api = ResidentAuthApi(BuildConfig.RESIDENT_API_BASE_URL)
+    private lateinit var api: ResidentAuthApi
     private val refreshLock = Mutex()
     @Volatile private var accessToken: String? = null
 
     fun init(context: Context) {
-        if (!::store.isInitialized) store = SessionStore(context.applicationContext)
+        if (::store.isInitialized) return
+        store = SessionStore(context.applicationContext)
+        ApiEnvironment.entries.find { it.name == store.environment }?.let { environment = it }
+        api = ResidentAuthApi(environment.apiUrl)
+    }
+
+    /** Points the app at another server. A session belongs to one server, so this signs out. */
+    suspend fun switchEnvironment(target: ApiEnvironment) {
+        if (target == environment) return
+        val previous = api
+        environment = target
+        api = ResidentAuthApi(target.apiUrl)
+        io { store.environment = target.name }
+        signOut(previous)
     }
 
     /** Turns a saved refresh token back into a session. Runs once per process. */
@@ -70,7 +87,9 @@ object ResidentSession {
     }
 
     /** Signs out on this phone at once, then ends the session on the server as well, if it can. */
-    suspend fun signOut() {
+    suspend fun signOut() = signOut(api)
+
+    private suspend fun signOut(server: ResidentAuthApi) {
         val access = accessToken
         val refresh = io { store.refreshToken }
         accessToken = null
@@ -79,12 +98,12 @@ object ResidentSession {
         try {
             io {
                 // No live access token: spend the refresh token on one to sign out with.
-                val token = access ?: refresh?.let { api.refresh(it).accessToken } ?: return@io
+                val token = access ?: refresh?.let { server.refresh(it).accessToken } ?: return@io
                 try {
-                    api.logout(token)
+                    server.logout(token)
                 } catch (e: ResidentApiException) {
                     if (e.code != AUTH_REQUIRED || access == null || refresh == null) throw e
-                    api.logout(api.refresh(refresh).accessToken)
+                    server.logout(server.refresh(refresh).accessToken)
                 }
             }
         } catch (_: ResidentApiException) {

@@ -8,6 +8,17 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
+/** Path of the resident app API on the onboarding service. */
+const val MOBILE_API_PATH = "api/db/resident-app"
+
+/** Onboarding service deployments the app can sign in against. Chosen in Profile. */
+enum class ApiEnvironment(val label: String, val baseUrl: String) {
+    STAGE("Stage", "https://client-onboarding.up.railway.app"),
+    PROD("Production", "https://onboarding.gbotz.site");
+
+    val apiUrl get() = "$baseUrl/$MOBILE_API_PATH"
+}
+
 /** One household the signed-in number belongs to. A number can be registered in several units or condos. */
 data class Household(
     val personId: Int,
@@ -33,8 +44,8 @@ internal class Tokens(val accessToken: String, val refreshToken: String)
  * Resident app sign-in API of the onboarding service (app-web-ui-client-onboarding,
  * docs/RESIDENT_APP_API.md). Blocking calls: run them off the main thread.
  */
-internal class ResidentAuthApi(baseUrl: String) {
-    private val root = baseUrl.trimEnd('/') + "/api/db/resident-app"
+internal class ResidentAuthApi(apiUrl: String) {
+    private val root = apiUrl.trimEnd('/')
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)

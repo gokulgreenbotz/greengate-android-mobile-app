@@ -38,9 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.ApiEnvironment
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.screens.home.LayeredActionIcon
 import com.greenbotz.greengate.ui.screens.home.LayeredIconSetZero
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
@@ -54,9 +56,35 @@ private val ProfileCream: Color @Composable get() = MaterialTheme.colorScheme.su
 private val ProfileLogoutRed = Color(0xFFDF4336)
 
 @Composable
-fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
+fun ProfileScreen(
+    navController: NavController,
+    onLogout: () -> Unit = {},
+    onSwitchServer: (ApiEnvironment) -> Unit = {}
+) {
     val context = LocalContext.current
     var confirmLogout by remember { mutableStateOf(false) }
+    var confirmServer by remember { mutableStateOf<ApiEnvironment?>(null) }
+    confirmServer?.let { target ->
+        AlertDialog(
+            onDismissRequest = { confirmServer = null },
+            title = { Text("Switch to ${target.label}?", fontFamily = DMSans) },
+            text = {
+                Text(
+                    "You'll be signed out. Sign in again to use ${target.apiUrl}.",
+                    fontFamily = DMSans
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmServer = null
+                    onSwitchServer(target)
+                }) { Text("Switch", fontFamily = DMSans) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmServer = null }) { Text("Cancel", fontFamily = DMSans) }
+            }
+        )
+    }
     if (confirmLogout) {
         AlertDialog(
             onDismissRequest = { confirmLogout = false },
@@ -203,6 +231,32 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         onCheckedChange = { AppPreferences.setShowFeedback(context, it) },
                         colors = SwitchDefaults.colors(checkedTrackColor = ProfileGreen)
                     )
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text("SERVER", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = ProfileCream,
+                shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.selectableGroup()) {
+                    ApiEnvironment.entries.forEachIndexed { index, server ->
+                        if (index > 0) HorizontalDivider(color = Color(0xFFEDEAE0))
+                        val selected = ResidentSession.environment == server
+                        Row(Modifier.fillMaxWidth().selectable(
+                            selected = selected,
+                            role = Role.RadioButton,
+                            onClick = { if (!selected) confirmServer = server }
+                        ).padding(vertical = 10.dp, horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(server.label, fontFamily = DMSans, fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium, color = ProfileInk)
+                                Text(server.apiUrl, fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted)
+                            }
+                            RadioButton(selected = selected, onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = ProfileGreen))
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))

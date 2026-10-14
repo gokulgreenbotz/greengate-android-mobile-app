@@ -51,7 +51,11 @@ class MainActivity : ComponentActivity() {
                         ready = session != ResidentSession.State.Restoring
                     )
                 } else if (session is ResidentSession.State.SignedIn || session == ResidentSession.State.Demo) {
-                    MainScreen(controller = callController, onLogout = { scope.launch { ResidentSession.signOut() } })
+                    MainScreen(
+                        controller = callController,
+                        onLogout = { scope.launch { ResidentSession.signOut() } },
+                        onSwitchServer = { server -> scope.launch { ResidentSession.switchEnvironment(server) } }
+                    )
                 } else {
                     LoginScreen()
                 }

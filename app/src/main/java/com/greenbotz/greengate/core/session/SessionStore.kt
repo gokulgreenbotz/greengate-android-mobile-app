@@ -14,6 +14,7 @@ import javax.crypto.spec.GCMParameterSpec
 private const val PREFS_NAME = "resident_session"
 private const val KEY_DEVICE_ID = "device_id"
 private const val KEY_REFRESH_TOKEN = "refresh_token"
+private const val KEY_ENVIRONMENT = "environment"
 private const val KEYSTORE = "AndroidKeyStore"
 private const val KEY_ALIAS = "resident_session_key"
 private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -34,6 +35,13 @@ internal class SessionStore(context: Context) {
             prefs.edit().putString(KEY_DEVICE_ID, it).commit()
         }
     }
+
+    /** [ApiEnvironment] name the session belongs to; null until one is chosen in Profile. */
+    var environment: String?
+        get() = prefs.getString(KEY_ENVIRONMENT, null)
+        set(value) {
+            prefs.edit().putString(KEY_ENVIRONMENT, value).commit()
+        }
 
     /** Null when signed out, or when the Keystore key is gone (e.g. data restored to a new phone). */
     var refreshToken: String?
