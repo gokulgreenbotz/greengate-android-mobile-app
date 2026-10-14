@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase client config: never commit (see CLAUDE.md)
+google-services.json
