@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.core.facility.Transaction
 import com.greenbotz.greengate.core.facility.TransactionKind
@@ -47,6 +48,7 @@ import com.greenbotz.greengate.ui.screens.facilities.ArtworkTile
 import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDivider
+import com.greenbotz.greengate.ui.screens.facilities.FacilityGlassBorder
 import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
 import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
 import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
@@ -143,12 +145,12 @@ internal fun PaymentsScreen(navController: NavController) {
                 }
                 if (shown.isEmpty()) item {
                     Text("Nothing here yet.", Modifier.fillMaxWidth().padding(top = 32.dp), fontFamily = DMSans,
-                        fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted, textAlign = TextAlign.Center)
+                        fontSize = 15.sp, color = FacilityMuted, textAlign = TextAlign.Center)
                 }
                 groups.forEach { (header, transactions) ->
                     item(key = "h-$header") {
                         Text(header, Modifier.padding(top = 6.dp), fontFamily = DMSans, fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk
+                            fontWeight = FontWeight.SemiBold, color = FacilityInk
                         )
                     }
                     items(transactions, key = { it.id }) { t ->
@@ -187,13 +189,13 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.height(40.dp).clip(shape)
             .background(if (selected) BookingsDeepGreen else Color(0xB3FFFFFF))
-            .border(1.dp, if (selected) BookingsDeepGreen else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGlassBorder, shape)
+            .border(1.dp, if (selected) BookingsDeepGreen else FacilityGlassBorder, shape)
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(label, fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-            color = if (selected) Color.White else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
+            color = if (selected) Color.White else FacilityMuted
         )
     }
 }
@@ -265,7 +267,7 @@ internal fun TransactionDetailScreen(navController: NavController, t: Transactio
             )))
         TransactionKind.DEPOSIT -> Triple("Deposit Held", Icons.Outlined.Lock,
             Brush.linearGradient(listOf(Color(0xFFF29A55),
-                _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityOrange
+                FacilityOrange
             )))
     }
     val remarks = when (t.kind) {
@@ -387,8 +389,8 @@ private fun DetailLine(label: String, value: String, onClick: (() -> Unit)? = nu
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
         Text(value, Modifier.weight(1.4f), fontFamily = DMSans, fontSize = 14.sp, lineHeight = 20.sp,
-            fontWeight = FontWeight.Medium, color = if (onClick != null) BookingsDeepGreen else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, textAlign = TextAlign.End)
+            fontWeight = FontWeight.Medium, color = if (onClick != null) BookingsDeepGreen else FacilityInk, textAlign = TextAlign.End)
     }
 }

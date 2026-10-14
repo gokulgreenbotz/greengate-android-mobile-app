@@ -7,18 +7,23 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.greenbotz.greengate.core.call.ReceiverCallController
+import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
+import com.greenbotz.greengate.core.call.provider.SharedCallConfig
 import com.greenbotz.greengate.core.push.CallSignalingService
 import com.greenbotz.greengate.core.push.IncomingCallNotifier
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.navigation.MainScreen
 import com.greenbotz.greengate.ui.screens.auth.LoginScreen
 import com.greenbotz.greengate.ui.screens.auth.SplashScreen
 import com.greenbotz.greengate.ui.theme.GreenGateTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -37,13 +42,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             GreenGateTheme {
                 var showSplash by remember { mutableStateOf(true) }
-                var signedIn by rememberSaveable { mutableStateOf(false) }
+                val session = ResidentSession.state
+                val scope = rememberCoroutineScope()
+                LaunchedEffect(Unit) { ResidentSession.restore() }
                 if (showSplash) {
-                    SplashScreen(onFinished = { showSplash = false })
-                } else if (!signedIn) {
-                    LoginScreen(onSignedIn = { signedIn = true })
+                    SplashScreen(
+                        onFinished = { showSplash = false },
+                        ready = session != ResidentSession.State.Restoring
+                    )
+                } else if (session is ResidentSession.State.SignedIn || session == ResidentSession.State.Demo) {
+                    MainScreen(controller = callController, onLogout = { scope.launch { ResidentSession.signOut() } })
                 } else {
-                    MainScreen(controller = callController, onLogout = { signedIn = false })
+                    LoginScreen()
                 }
             }
         }
@@ -95,13 +105,13 @@ class MainActivity : ComponentActivity() {
 
         val creds = if (providerStr.equals("vonage", ignoreCase = true)) {
             val apiKey = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_API_KEY).takeUnless { it.isNullOrBlank() }
-                ?: com.greenbotz.greengate.core.call.provider.SharedCallConfig.vonageApiKey
+                ?: SharedCallConfig.vonageApiKey
             val sessionId = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_SESSION_ID).takeUnless { it.isNullOrBlank() }
-                ?: com.greenbotz.greengate.core.call.provider.SharedCallConfig.vonageSessionId
+                ?: SharedCallConfig.vonageSessionId
             val token = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_TOKEN).takeUnless { it.isNullOrBlank() }
-                ?: com.greenbotz.greengate.core.call.provider.SharedCallConfig.vonageToken
+                ?: SharedCallConfig.vonageToken
 
-            com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials.Vonage(
+            ReceiverCallCredentials.Vonage(
                 callId = callId,
                 visitorName = visitorName,
                 unitName = unitName,
@@ -111,10 +121,10 @@ class MainActivity : ComponentActivity() {
                 token = token
             )
         } else {
-            val roomName = intent.getStringExtra(CallSignalingService.EXTRA_ROOM_NAME) ?: com.greenbotz.greengate.core.call.provider.SharedCallConfig.twilioRoomName
-            val accessToken = intent.getStringExtra(CallSignalingService.EXTRA_ACCESS_TOKEN) ?: com.greenbotz.greengate.core.call.provider.SharedCallConfig.twilioReceiverToken
+            val roomName = intent.getStringExtra(CallSignalingService.EXTRA_ROOM_NAME) ?: SharedCallConfig.twilioRoomName
+            val accessToken = intent.getStringExtra(CallSignalingService.EXTRA_ACCESS_TOKEN) ?: SharedCallConfig.twilioReceiverToken
 
-            com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials.Twilio(
+            ReceiverCallCredentials.Twilio(
                 callId = callId,
                 visitorName = visitorName,
                 unitName = unitName,

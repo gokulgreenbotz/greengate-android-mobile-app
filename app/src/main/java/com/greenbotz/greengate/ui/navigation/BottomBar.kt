@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.ui.screens.home.BottomBarHeight
@@ -36,13 +37,22 @@ import com.greenbotz.greengate.ui.screens.home.MarinaArt
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
 import com.greenbotz.greengate.ui.screens.home.MarinaCream
 import com.greenbotz.greengate.ui.screens.home.NavItem
-import com.greenbotz.greengate.R
+import com.greenbotz.greengate.ui.screens.home.ThemeThreeBottomNavigation
+import com.greenbotz.greengate.ui.screens.home.ThemeTwoBottomNavigation
 import com.greenbotz.greengate.ui.screens.home.ThemeZeroBottomNavigation
 
 @Composable
 fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
     if (AppPreferences.theme == AppTheme.ZERO) {
         ThemeZeroBottomNavigation(navController, currentRoute)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.TWO) {
+        ThemeTwoBottomNavigation(navController, currentRoute)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.THREE) {
+        ThemeThreeBottomNavigation(navController, currentRoute)
         return
     }
     fun navigate(route: String) {

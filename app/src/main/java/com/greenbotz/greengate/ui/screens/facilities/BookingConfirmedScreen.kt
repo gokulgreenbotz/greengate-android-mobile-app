@@ -65,17 +65,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
-import com.greenbotz.greengate.ui.theme.DMSans
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStore
-import com.greenbotz.greengate.R
 import com.greenbotz.greengate.ui.navigation.Screen
-import kotlinx.coroutines.launch
+import com.greenbotz.greengate.ui.theme.DMSans
 import java.util.Calendar
+import kotlinx.coroutines.launch
 
 private val ConfirmedBackdrop = Color(0xFFE3F2EF)
 private val ConfirmedDeepGreen = Color(0xFF0F7A5C)
@@ -122,7 +122,7 @@ internal fun BookingConfirmedScreen(navController: NavController, booking: Booki
         title = { Text("Cancel this booking?", fontFamily = DMSans) },
         text = {
             Text(
-                if (facility.deposit > 0) "Your S$${facility.deposit} deposit will be refunded to your wallet."
+                if (facility.deposit > 0) "Your $${facility.deposit} deposit will be refunded to your wallet."
                 else "The slot will be released for other residents.",
                 fontFamily = DMSans
             )
@@ -419,7 +419,7 @@ private fun PaidSummaryCard(deposit: Int, method: PaymentMethod) {
                 fontWeight = FontWeight.Medium, color = FacilityInk
             )
             Column(horizontalAlignment = Alignment.End) {
-                Text("S$$deposit.00", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ConfirmedDeepGreen)
+                Text("$$deposit.00", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ConfirmedDeepGreen)
                 Text(if (deposit > 0) "Paid via ${method.title}" else "Nothing to pay",
                     fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted
                 )
@@ -450,7 +450,7 @@ private fun PaidRow(icon: ImageVector, label: String, amount: Int) {
         }
         Spacer(Modifier.width(12.dp))
         Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk)
-        Text("S$$amount.00", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+        Text("$$amount.00", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
     }
 }
 

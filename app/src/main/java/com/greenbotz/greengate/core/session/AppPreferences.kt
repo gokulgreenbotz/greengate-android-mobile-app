@@ -5,8 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class IconSet { ZERO, CLAY, ONE, TWO, THREE }
-enum class AppTheme { ZERO, ONE }
+enum class IconSet { ZERO, CLAY, TWO, THREE }
+enum class AppTheme { ZERO, ONE, TWO, THREE }
 
 private const val PREFS_NAME = "greengate_prefs"
 private const val KEY_ICON_SET = "icon_set"
@@ -23,7 +23,7 @@ object AppPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putString("theme", value.name).apply()
     }
-    var iconSet by mutableStateOf(IconSet.ONE)
+    var iconSet by mutableStateOf(IconSet.ZERO)
         private set
 
     var useReferenceArtwork by mutableStateOf(true)
@@ -51,13 +51,14 @@ object AppPreferences {
             .getOrDefault(AppTheme.ZERO)
         // The original flat set was saved as TWO. Keep existing users on that artwork.
         if (preferences.getInt(KEY_ICON_SET_VERSION, 1) < 2) {
-            val previous = preferences.getString(KEY_ICON_SET, IconSet.ONE.name)
+            val previous = preferences.getString(KEY_ICON_SET, IconSet.ZERO.name)
             preferences.edit()
                 .putString(KEY_ICON_SET, if (previous == IconSet.TWO.name) IconSet.THREE.name else previous)
                 .putInt(KEY_ICON_SET_VERSION, 2).apply()
         }
-        val stored = preferences.getString(KEY_ICON_SET, IconSet.ONE.name)
-        iconSet = runCatching { IconSet.valueOf(stored ?: IconSet.ONE.name) }.getOrDefault(IconSet.ONE)
+        // Set 1 was removed; anyone who had it saved falls back to Set 0.
+        val stored = preferences.getString(KEY_ICON_SET, IconSet.ZERO.name)
+        iconSet = runCatching { IconSet.valueOf(stored ?: IconSet.ZERO.name) }.getOrDefault(IconSet.ZERO)
         useReferenceArtwork = preferences.getBoolean(KEY_REFERENCE_HOME_ARTWORK, true)
         showFeedback = preferences.getBoolean(KEY_SHOW_FEEDBACK, false)
     }

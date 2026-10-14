@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -26,6 +27,7 @@ internal class GreenBotVoice(
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioManager = appContext.getSystemService(AudioManager::class.java)
 
     var isListening by mutableStateOf(false)
         private set
@@ -39,6 +41,9 @@ internal class GreenBotVoice(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    /** True when a reply is being read while media volume is zero, so the user hears nothing. */
+    var replyMuted by mutableStateOf(false)
+        private set
 
     private var released = false
     private var recognizer: SpeechRecognizer? = null
@@ -51,6 +56,7 @@ internal class GreenBotVoice(
     private var ttsInitializationVersion = 0L
     private var ttsInitializationTimeout: Runnable? = null
     private var pendingSpeech: String? = null
+    private var lastReply: String? = null
     private var speechVersion = 0L
     private val activeUtterances = mutableSetOf<String>()
 
@@ -63,6 +69,7 @@ internal class GreenBotVoice(
         stopSpeechOutput()
         closeRecognition()
         error = null
+        replyMuted = false
         partialText = ""
         if (appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             error = "Allow microphone access to use voice mode."
@@ -122,6 +129,7 @@ internal class GreenBotVoice(
         if (released) return@onMain
         closeRecognition()
         stopSpeechOutput()
+        replyMuted = false
         partialText = ""
     }
 
@@ -133,6 +141,7 @@ internal class GreenBotVoice(
         stopSpeechOutput()
         error = null
         pendingSpeech = reply
+        lastReply = reply
         when {
             ttsReady -> speakPendingReply()
             ttsInitializing -> Unit
@@ -142,7 +151,23 @@ internal class GreenBotVoice(
     }
 
     fun clearError() = onMain {
-        if (!released) error = null
+        if (released) return@onMain
+        error = null
+        replyMuted = false
+    }
+
+    /** Raises media volume to an audible level at the user's request and replays the last reply. */
+    fun turnUpVolume() = onMain {
+        if (released) return@onMain
+        val audio = audioManager ?: return@onMain
+        runCatching {
+            val audible = (audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2).coerceAtLeast(1)
+            if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) < audible) {
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, audible, AudioManager.FLAG_SHOW_UI)
+            }
+        }
+        replyMuted = false
+        lastReply?.let(::speak)
     }
 
     fun release() = onMain {
@@ -325,6 +350,9 @@ internal class GreenBotVoice(
                 }
             }
             isSpeaking = activeUtterances.isNotEmpty()
+            // Text-to-speech plays on the media stream, so a reply at zero media volume is silent.
+            replyMuted = runCatching { audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) == 0 }
+                .getOrDefault(false)
         } catch (_: RuntimeException) {
             stopSpeechOutput()
             error = "The voice service stopped unexpectedly. You can read the reply in the chat."

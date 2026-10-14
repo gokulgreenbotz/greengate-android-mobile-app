@@ -1,6 +1,8 @@
 package com.greenbotz.greengate.ui.screens.facilities
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -10,11 +12,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,15 +33,21 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.greenbotz.greengate.ui.screens.visitors.InviteFieldBorder
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.PrimaryGreen
+import com.greenbotz.greengate.ui.theme.SecondaryGreen
+import com.greenbotz.greengate.ui.theme.SoftGreen
 import java.util.Calendar
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** A calendar day; months are 0-based like [Calendar.MONTH]. */
 internal data class BookingDay(val year: Int, val month: Int, val day: Int) : Comparable<BookingDay> {
@@ -65,6 +79,12 @@ private val WeekdayNames = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "T
 
 // Hourly slots from 7 AM; the last one starts at 9 PM.
 private val SlotHours = 7..21
+
+/** The slot grid shows one half of the day at a time; noon onwards is all Afternoon. */
+private enum class SlotPeriod(val label: String, val hours: IntRange) {
+    MORNING("Morning", SlotHours.first..11),
+    AFTERNOON("Afternoon", 12..SlotHours.last)
+}
 
 private enum class SlotState { OPEN, FEW_LEFT, FULL, PAST }
 
@@ -106,9 +126,8 @@ internal fun FacilityBookingPanel(
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))))
-            .border(1.5.dp,
-                FacilityGlassBorder, shape)
+            .background(themed(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))), SolidColor(ClassicCream)))
+            .border(1.5.dp, FacilityGlassBorder, shape)
             .padding(16.dp)
     ) {
         QuickDayChips(selectedDay, otherOpen = showCalendar,
@@ -165,8 +184,8 @@ private fun DayChip(title: String, subtitle: String, selected: Boolean, modifier
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.height(58.dp).clip(shape)
-            .background(if (selected) Color(0xFFDDF5EC) else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) Color(0xFF3FB58E) else Color(0xFFE3ECE9), shape)
+            .background(if (selected) themed(Color(0xFFDDF5EC), ClassicMint) else Color.White)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) themed(Color(0xFF3FB58E), PrimaryGreen) else InviteFieldBorder, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
@@ -184,8 +203,7 @@ internal fun MonthCalendar(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${MonthNames[month.month]} ${month.year}", Modifier.weight(1f),
-                fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk
-            )
+                fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
             // Bookings can't be made in the past, so there's nothing to see before this month.
             val canGoBack = month.year > today.year || (month.year == today.year && month.month > today.month)
             MonthArrow(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", canGoBack) {
@@ -200,7 +218,7 @@ internal fun MonthCalendar(
         Row {
             listOf("S", "M", "T", "W", "T", "F", "S").forEach {
                 Text(it, Modifier.weight(1f), fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted,
-                    textAlign = TextAlign.Center)
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -229,7 +247,7 @@ internal fun MonthCalendar(
 private fun Calendar.toDay() = BookingDay(get(Calendar.YEAR), get(Calendar.MONTH), get(Calendar.DAY_OF_MONTH))
 
 @Composable
-private fun MonthArrow(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+private fun MonthArrow(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.size(38.dp).clip(CircleShape).background(Color(0xB3FFFFFF))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
@@ -249,9 +267,7 @@ private fun DayCell(
     Box(modifier.height(52.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(46.dp).clip(RoundedCornerShape(16.dp))
-                .then(if (isSelected) Modifier.background(Brush.verticalGradient(listOf(Color(0xFF2AA07D),
-                    FacilityGreen
-                ))) else Modifier)
+                .then(if (isSelected) Modifier.background(Brush.verticalGradient(listOf(themed(Color(0xFF2AA07D), SecondaryGreen), FacilityGreen))) else Modifier)
                 .clickable(enabled = selectable, role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -281,23 +297,45 @@ private fun SlotPicker(
     var selectedHour by remember(day) { mutableStateOf<Int?>(null) }
     var guests by remember { mutableIntStateOf(1) }
     val nowHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    // Once today's last morning slot has gone, open on the afternoon.
+    val opening = if (day == today && nowHour >= SlotPeriod.MORNING.hours.last) SlotPeriod.AFTERNOON else SlotPeriod.MORNING
+    val pager = rememberPagerState(initialPage = opening.ordinal) { SlotPeriod.entries.size }
+    LaunchedEffect(day) { pager.scrollToPage(opening.ordinal) }
+    val scope = rememberCoroutineScope()
     Column {
         Text(day.longLabel(), fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-        Text("Choose a time slot", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Select Time", Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+            PeriodToggle(pager) { period ->
+                scope.launch { pager.animateScrollToPage(period.ordinal, animationSpec = periodSlide()) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LegendDot(FacilityGreen, "Selected")
             LegendDot(FacilityOrange, "Few left")
             LegendDot(FacilityMuted.copy(alpha = .4f), "Full")
         }
         Spacer(Modifier.height(12.dp))
-        SlotHours.chunked(3).forEach { row ->
-            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { hour ->
-                    val state = slotState(facilityName, day, hour, busy, today, nowHour)
-                    SlotChip(hour, state, selected = hour == selectedHour, Modifier.weight(1f)) { selectedHour = hour }
+        // Swipe the grid or tap the toggle to slide between halves. The chosen slot stays chosen
+        // across them, and the bar below still shows it.
+        HorizontalPager(
+            pager, Modifier.fillMaxWidth(), pageSpacing = 16.dp, beyondViewportPageCount = 1,
+            verticalAlignment = Alignment.Top,
+            flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = periodSlide())
+        ) { page ->
+            // Every page is as tall as the longest half, so the panel doesn't jump as it slides.
+            Column(Modifier.heightIn(min = SlotRowHeight * SlotPeriodRows)) {
+                SlotPeriod.entries[page].hours.chunked(SlotColumns).forEach { row ->
+                    Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { hour ->
+                            val state = slotState(facilityName, day, hour, busy, today, nowHour)
+                            SlotChip(hour, state, selected = hour == selectedHour, Modifier.weight(1f)) { selectedHour = hour }
+                        }
+                        repeat(SlotColumns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -307,11 +345,51 @@ private fun SlotPicker(
             }
             StepButton("−", "Fewer guests", guests > 1) { guests-- }
             Text("$guests", Modifier.widthIn(min = 40.dp), fontFamily = DMSans, fontSize = 18.sp,
-                fontWeight = FontWeight.Bold, color = FacilityInk, textAlign = TextAlign.Center)
+                fontWeight = FontWeight.Bold, color = FacilityInk, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             StepButton("+", "More guests", guests < maxGuests) { guests++ }
         }
         Spacer(Modifier.height(12.dp))
         SelectionBar(day, selectedHour, glyph) { hour -> onBooked(hour, guests) }
+    }
+}
+
+private const val SlotColumns = 4
+// A chip row is 48dp plus its 10dp bottom padding.
+private val SlotRowHeight = 58.dp
+private val SlotPeriodRows = SlotPeriod.entries.maxOf { (it.hours.count() + SlotColumns - 1) / SlotColumns }
+private val PeriodSegmentWidth = 88.dp
+
+/** Quick and settled: the halves trade places in a quarter second, for taps and swipes alike. */
+private fun periodSlide() = tween<Float>(250, easing = FastOutSlowInEasing)
+
+/**
+ * Morning / Afternoon segmented switch beside "Select Time". Its highlight is placed from the
+ * pager's live scroll position, so it glides along with a swipe rather than jumping at the end.
+ */
+@Composable
+private fun PeriodToggle(pager: PagerState, onSelect: (SlotPeriod) -> Unit) {
+    val current by remember { derivedStateOf { (pager.currentPage + pager.currentPageOffsetFraction).roundToInt() } }
+    Box(Modifier.clip(CircleShape).background(Color(0xE6FFFFFF)).border(1.dp, FacilityGlassBorder, CircleShape).padding(3.dp)) {
+        Box(
+            Modifier.offset {
+                val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, SlotPeriod.entries.lastIndex.toFloat())
+                IntOffset((position * PeriodSegmentWidth.toPx()).roundToInt(), 0)
+            }.size(PeriodSegmentWidth, 32.dp).background(themed(Color(0xFFCDF3E4), ClassicMint), CircleShape)
+        )
+        Row(Modifier.selectableGroup()) {
+            SlotPeriod.entries.forEach { period ->
+                val active = period.ordinal == current
+                Box(
+                    Modifier.size(PeriodSegmentWidth, 32.dp).clip(CircleShape)
+                        .selectable(active, role = Role.Tab) { onSelect(period) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(period.label, fontFamily = DMSans, fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (active) FacilityGreen else FacilityInk)
+                }
+            }
+        }
     }
 }
 
@@ -321,20 +399,17 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
     val shape = RoundedCornerShape(22.dp)
     Row(
         Modifier.fillMaxWidth().clip(shape).background(Color(0xCCFFFFFF))
-            .border(1.5.dp,
-                FacilityGlassBorder, shape)
+            .border(1.5.dp, FacilityGlassBorder, shape)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             Modifier.size(58.dp).clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(Color.White, Color(0xFFE3F5EE))))
-                .border(1.dp,
-                    FacilityGlassBorder, RoundedCornerShape(16.dp)),
+                .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFE3F5EE), ClassicMint))))
+                .border(1.dp, FacilityGlassBorder, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) { glyph() }
-        Box(Modifier.padding(horizontal = 12.dp).width(1.dp).height(44.dp).background(
-            FacilityMuted.copy(alpha = .2f)))
+        Box(Modifier.padding(horizontal = 12.dp).width(1.dp).height(44.dp).background(FacilityMuted.copy(alpha = .2f)))
         Column(Modifier.weight(1f)) {
             Text(if (hour != null) "Selected" else "No slot yet", fontFamily = DMSans, fontSize = 12.sp, color = FacilityMuted)
             // Date over time: on one line the pair doesn't fit beside the Continue button.
@@ -350,7 +425,7 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
         Spacer(Modifier.width(8.dp))
         Row(
             Modifier.height(50.dp).clip(RoundedCornerShape(18.dp))
-                .background(if (hour != null) Color(0xFF8EF0CF) else FacilityMuted.copy(alpha = .18f))
+                .background(if (hour != null) themed(Color(0xFF8EF0CF), SoftGreen) else FacilityMuted.copy(alpha = .18f))
                 .clickable(enabled = hour != null, role = Role.Button) { hour?.let(onContinue) }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -367,8 +442,7 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
 private fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.size(38.dp).clip(CircleShape).background(Color(0xE6FFFFFF))
-            .border(1.dp,
-                FacilityGlassBorder, CircleShape)
+            .border(1.dp, FacilityGlassBorder, CircleShape)
             .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
             .alpha(if (enabled) 1f else .35f),
         contentAlignment = Alignment.Center
@@ -412,9 +486,7 @@ private fun SlotChip(hour: Int, state: SlotState, selected: Boolean, modifier: M
             textDecoration = if (state == SlotState.FULL) TextDecoration.LineThrough else null
         )
         if (state == SlotState.FEW_LEFT && !selected) {
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 7.dp).size(6.dp).clip(CircleShape).background(
-                FacilityOrange
-            ))
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 7.dp).size(6.dp).clip(CircleShape).background(FacilityOrange))
         }
     }
 }

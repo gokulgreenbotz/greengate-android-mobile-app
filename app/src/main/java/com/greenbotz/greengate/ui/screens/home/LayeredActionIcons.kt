@@ -8,7 +8,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -18,39 +17,37 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.ClipOp
-import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.R
-import kotlinx.coroutines.delay
+import com.greenbotz.greengate.core.session.IconSet
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 internal class ActionIconSequence {
     var activeIndex by mutableIntStateOf(-1)
@@ -91,7 +88,7 @@ internal fun LayeredActionIcon(
     modifier: Modifier = Modifier.fillMaxWidth().height(85.dp)
 ) {
     // A fixed design canvas makes the profile preview and home illustration identical.
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val scale = minOf(maxWidth.value / 112f, maxHeight.value / 85f)
         Box(Modifier.requiredSize(112.dp, 85.dp).graphicsLayer {
             scaleX = scale
@@ -120,17 +117,14 @@ private class PaperLines(
     val slope: Float = 0f
 )
 
-private val SetOnePaperLines = PaperLines(42.25f, 59.3f, 31.6f, 4.2f,
-    IntOffset(402, 730), IntSize(466, 62), 16.75f, 59f, 61.4f, 14f)
-
 // Lines at x 448..877 (last ends at 693), last line centred at y 849, 49 px thick.
 private val SetZeroPaperLines = PaperLines(45.1f, 55.79f, 29.62f, 3.59f,
     IntOffset(444, 702), IntSize(437, 53), 16.88f, 62f, 57.55f, 12.47f)
 
-// The clay sheet is tilted about 8.5°: its long line runs x 471..911 (y 663 → 598) and the
-// last line x 505..834 (y 797 → 747). The long line's band is shifted by (34, 134) onto the last.
-private val ClayPaperLines = PaperLines(49.23f, 48.6f, 29.89f, 6.98f,
-    IntOffset(471, 583), IntSize(441, 103), 22.3f, 71.53f, 50.7f, 7.59f, slope = -.148f)
+// The clay sheet is upright: its long line runs x 461..869 (y 594..644) and the last line
+// x 462..704 (y 843..894). The long line's band is moved 250 px down onto the last.
+private val ClayPaperLines = PaperLines(45.84f, 56.94f, 28.47f, 3.93f,
+    IntOffset(455, 590), IntSize(420, 58), 16.95f, 62.79f, 58.9f, 11.18f)
 
 /** A pen drawn [size] dp square whose nib sits at ([nibX], [nibY]) within it. */
 private class PenPlacement(val size: Float, val nibX: Float, val nibY: Float)
@@ -153,13 +147,6 @@ private data class IllustratedIconArt(
     val penAt: PenPlacement = PenPlacement(38f, 8.5f, 34.3f)
 )
 
-private val SetOneArt = IllustratedIconArt(
-    R.drawable.ic_calendar_racket, R.drawable.ic_tennis_ball, R.drawable.ic_id_card,
-    R.drawable.ic_person_profile, R.drawable.ic_paper_with_lines, R.drawable.ic_pen,
-    R.drawable.ic_chat_bubbles, R.drawable.ic_chat_dots, R.drawable.ic_chat_heart,
-    SetOnePaperLines, PersonPlacement(27f, 29f, 43f, 9f)
-)
-// Set 0's card sits 0.8 dp right and 0.8 dp higher than Set 1's.
 private val SetZeroArt = IllustratedIconArt(
     R.drawable.ic_calendar_racket_with_shadow, R.drawable.ic_tennis_ball_without_shadow,
     R.drawable.ic_id_card_with_shadow, R.drawable.ic_person_profile_with_shadow,
@@ -169,33 +156,28 @@ private val SetZeroArt = IllustratedIconArt(
     SetZeroPaperLines, PersonPlacement(27.8f, 28.2f, 43f, 9f)
 )
 // The clay pack's ball and calendar are reframed to Set 0's canvases, so they share its
-// motion. It has no chat bubbles, so Feedback keeps Set 0's. Its landscape card tilts 12°
-// with the face centred near (602, 740) px; its steeper pen has the nib at (416, 1086) px.
+// motion. It has no chat bubbles, so Feedback keeps Set 0's. Its portrait lanyard card tilts
+// about 8°, with the face below the slot centred near (530, 770) px; the pen's nib is at
+// (409.5, 1046) px.
 private val SetClayArt = SetZeroArt.copy(
     calendar = R.drawable.ic_clay_calendar_racket, ball = R.drawable.ic_clay_ball,
     badge = R.drawable.ic_clay_id_card, person = R.drawable.ic_clay_person,
     paper = R.drawable.ic_clay_paper, pen = R.drawable.ic_clay_pen,
-    lines = ClayPaperLines, personAt = PersonPlacement(35.9f, 30.6f, 38f, 12f),
-    penAt = PenPlacement(43.7f, 14.5f, 37.85f)
+    lines = ClayPaperLines, personAt = PersonPlacement(31.96f, 33.76f, 36f, 8f),
+    penAt = PenPlacement(48f, 15.67f, 40.04f)
 )
 
-/** Sets 0, 0.1 and 1 share placement and animation; only their supplied artwork differs. */
+/** Sets 0 and 0.1 share placement and animation; only their supplied artwork differs. */
 @Composable
-internal fun LayeredIconSetOne(
+internal fun LayeredIconSetZero(
     index: Int,
     progress: Float,
     active: Boolean,
     modifier: Modifier = Modifier.fillMaxWidth().height(85.dp),
-    iconSet: IconSet = IconSet.ONE
+    iconSet: IconSet = IconSet.ZERO
 ) {
-    val art = when (iconSet) {
-        IconSet.ZERO -> SetZeroArt
-        IconSet.CLAY -> SetClayArt
-        else -> SetOneArt
-    }
-    // Set 0.1 animates exactly like Set 0.
-    val isZero = iconSet == IconSet.ZERO || iconSet == IconSet.CLAY
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+    val art = if (iconSet == IconSet.CLAY) SetClayArt else SetZeroArt
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val scale = minOf(maxWidth.value / 112f, maxHeight.value / 85f)
         Box(Modifier.requiredSize(112.dp, 85.dp).graphicsLayer {
             scaleX = scale
@@ -203,12 +185,8 @@ internal fun LayeredIconSetOne(
         }, contentAlignment = Alignment.TopStart) {
             when (index) {
                 0 -> {
-                    if (isZero) {
-                        // This pack's calendar is landscape; fit its shadow without stretching it.
-                        Image(painterResource(art.calendar), null, Modifier.size(112.dp, 85.dp))
-                    } else {
-                        Art(art.calendar, 13f, 0f, 85f)
-                    }
+                    // This pack's calendar is landscape; fit its shadow without stretching it.
+                    Image(painterResource(art.calendar), null, Modifier.size(112.dp, 85.dp))
                     val hop = if (active) when {
                         progress in .08f.. .55f -> ballArc((progress - .08f) / .47f, 18f)
                         progress in .60f.. .83f -> ballArc((progress - .60f) / .23f, 4.3f)
@@ -220,27 +198,22 @@ internal fun LayeredIconSetOne(
                         progress in .83f.. .91f -> sin(PI * (progress - .83f) / .08f).toFloat() * .04f
                         else -> 0f
                     } else 0f
-                    if (isZero) {
-                        // Keep the shadow on the ground at (53.5, 81.5), independent of the ball.
-                        // Its opacity and spread follow the same height, so both settle together.
-                        val heightFraction = (hop / 18f).coerceIn(0f, 1f)
-                        Art(
-                            R.drawable.ic_tennis_ball_ground_shadow, 36.2f, 52.62f, 34.6f,
-                            Modifier.graphicsLayer {
-                                transformOrigin = TransformOrigin(.5006f, .8348f)
-                                scaleX = 1f + heightFraction * .3f
-                                scaleY = 1f + heightFraction * .2f
-                                alpha = 1f - heightFraction * .65f
-                            })
-                    }
-                    // The new shadow-free ball has less transparent padding. Preserve its visible
-                    // diameter and the existing landing point rather than its old canvas size.
-                    val ballAt = if (isZero) floatArrayOf(38.65f, 54.71f, 29.7f)
-                    else floatArrayOf(37f, 52f, 33f)
-                    Art(art.ball, ballAt[0], ballAt[1], ballAt[2],
+                    // Keep the shadow on the ground at (53.5, 81.5), independent of the ball.
+                    // Its opacity and spread follow the same height, so both settle together.
+                    val heightFraction = (hop / 18f).coerceIn(0f, 1f)
+                    Art(R.drawable.ic_tennis_ball_ground_shadow, 36.2f, 52.62f, 34.6f,
+                        Modifier.graphicsLayer {
+                            transformOrigin = TransformOrigin(.5006f, .8348f)
+                            scaleX = 1f + heightFraction * .3f
+                            scaleY = 1f + heightFraction * .2f
+                            alpha = 1f - heightFraction * .65f
+                        })
+                    // The shadow-free ball has little transparent padding; this places its
+                    // visible diameter on the shadow's landing point.
+                    Art(art.ball, 38.65f, 54.71f, 29.7f,
                         Modifier.graphicsLayer {
                             translationY = -hop.dp.toPx()
-                            transformOrigin = TransformOrigin(.5f, if (isZero) .902f else .89f)
+                            transformOrigin = TransformOrigin(.5f, .902f)
                             scaleX = 1f + squash
                             scaleY = 1f - squash
                         })
@@ -268,14 +241,8 @@ internal fun LayeredIconSetOne(
                     // Each pack prints its lines in different places, so its measurements differ.
                     val lines = art.lines
                     val approach = smoothStep((progress / .2f).coerceIn(0f, 1f))
-                    // Set 0 keeps its written line at rest and clears it only when a new run starts;
-                    // Set 1 fades its line out as the pen returns.
-                    val keepsLine = isZero
-                    val written = when {
-                        active -> ((progress - .2f) / .55f).coerceIn(0f, 1f)
-                        keepsLine -> 1f
-                        else -> 0f
-                    }
+                    // The written line stays at rest and clears only when a new run starts.
+                    val written = if (active) ((progress - .2f) / .55f).coerceIn(0f, 1f) else 1f
                     val returning = smoothStep(((progress - .75f) / .25f).coerceIn(0f, 1f))
                     val restX = lines.endX + lines.extend - 1f
                     // On tilted paper the line's far end sits higher (or lower) than where it starts.
@@ -289,12 +256,7 @@ internal fun LayeredIconSetOne(
                                 this@drawWithContent.drawContent()
                             }
                         }.graphicsLayer {
-                            alpha = when {
-                                !active -> if (keepsLine) 1f else 0f
-                                progress < .2f -> 0f
-                                keepsLine -> 1f
-                                else -> 1f - returning
-                            }
+                            alpha = if (active && progress < .2f) 0f else 1f
                         })
                     val tipX = when {
                         !active -> restX
@@ -312,37 +274,22 @@ internal fun LayeredIconSetOne(
                     Art(art.pen, tipX - pen.nibX, tipY - pen.nibY, pen.size)
                 }
                 3 -> {
-                    // Set 0's bubbles sit higher: green 0.9 dp left, 0.8 dp up; peach 1.2 dp up.
-                    val dotsDx = if (isZero) -.87f else 0f
-                    val dotsDy = if (isZero) -.8f else 0f
-                    val heartDy = if (isZero) -1.16f else 0f
-                    // Once revealed, the reply bubble and heart stay for good, even after leaving Home.
-                    var feedbackRevealed by rememberSaveable(iconSet) { mutableStateOf(false) }
-                    LaunchedEffect(active, progress >= .97f) {
-                        if (active && progress >= .97f) feedbackRevealed = true
-                    }
                     // These independent assets let the green bubble remain visible throughout.
-                    Art(R.drawable.ic_feedback_green_bubble, 8.27f + dotsDx, .8f + dotsDy, 84f)
+                    Art(R.drawable.ic_feedback_green_bubble, 7.4f, 0f, 84f)
                     repeat(3) { dot ->
                         val lift = if (active) typingDotLift(progress / .85f, dot) else 0f
-                        // Row of dots sits just above the green bubble body's centre (50.3, 40.6).
-                        CroppedArt(art.dots, 34.7f + dotsDx + dot * 11.1f, 34.85f + dotsDy, 9f, 9f,
+                        // Row of dots sits just above the green bubble body's centre (49.4, 39.8).
+                        CroppedArt(art.dots, 33.83f + dot * 11.1f, 34.05f, 9f, 9f,
                             IntOffset(216 + dot * 300, 519), IntSize(224, 224),
                             Modifier.graphicsLayer { translationY = (-lift * 5f).dp.toPx() })
                     }
                     // All dots land by .58. Reveal the reply bubble first, then its heart.
-                    // Set 0 hides them only at the start of each run and shows them at rest;
-                    // Set 1 reveals them once, on its first run, and then keeps them.
-                    val bubbleT = when {
-                        !active -> if (isZero || feedbackRevealed) 1f else 0f
-                        !isZero && feedbackRevealed -> 1f
-                        else -> ((progress - .58f) / .24f).coerceIn(0f, 1f)
-                    }
+                    // They hide only at the start of each run and show at rest.
+                    val bubbleT = if (active) ((progress - .58f) / .24f).coerceIn(0f, 1f) else 1f
                     // A cheerful reply: springs out of its tail with a soft overshoot and wiggle.
                     val bubbleScale = if (bubbleT >= 1f) 1f else replyPop(bubbleT)
                     val settle = (1f - bubbleT) * (1f - bubbleT)
-                    Art(
-                        R.drawable.ic_feedback_red_bubble, 50.4f, 32.76f + heartDy, 52f,
+                    Art(R.drawable.ic_feedback_red_bubble, 50.4f, 31.6f, 52f,
                         Modifier.graphicsLayer {
                             transformOrigin = TransformOrigin(.72f, .8f)
                             alpha = (bubbleT / .25f).coerceIn(0f, 1f)
@@ -352,15 +299,14 @@ internal fun LayeredIconSetOne(
                             translationY = (4f * settle).dp.toPx()
                         })
                     val heartScale = when {
-                        !active -> if (isZero || feedbackRevealed) 1f else 0f
-                        !isZero && feedbackRevealed -> 1f
+                        !active -> 1f
                         progress < .80f -> 0f
                         progress < .90f -> smoothStep((progress - .80f) / .10f) * 1.18f
                         progress < .97f -> 1.18f - smoothStep((progress - .90f) / .07f) * .18f
                         else -> 1f
                     }
-                    // Heart sits just above the peach bubble body's centre (76.4, 58.3).
-                    Art(art.heart, 67.65f, 49.45f + heartDy, 17.5f,
+                    // Heart sits just above the peach bubble body's centre (76.4, 57.1).
+                    Art(art.heart, 67.65f, 48.29f, 17.5f,
                         Modifier.graphicsLayer {
                             alpha = if (heartScale == 0f) 0f else 1f
                             scaleX = heartScale
@@ -407,7 +353,7 @@ internal fun CommunitySetZeroIcon(
         t in .84f.. .88f -> sin(PI * (t - .84f) / .04f).toFloat() * .03f
         else -> 0f
     }
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val scale = minOf(maxWidth.value / 112f, maxHeight.value / 85f)
         Box(Modifier.requiredSize(112.dp, 85.dp).graphicsLayer {
             scaleX = scale
@@ -463,7 +409,7 @@ internal fun CommunityIcon(
     active: Boolean,
     modifier: Modifier = Modifier.fillMaxWidth().height(85.dp)
 ) {
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val scale = minOf(maxWidth.value / 112f, maxHeight.value / 85f)
         Box(Modifier.requiredSize(112.dp, 85.dp).graphicsLayer {
             scaleX = scale
@@ -475,8 +421,7 @@ internal fun CommunityIcon(
             val heartWidth = CommunityHeartSize.width * px
             val heartHeight = CommunityHeartSize.height * px
             // Base illustration with the heart's clear box cut out, so only the live heart shows.
-            Art(
-                R.drawable.ic_community, CommunityArtX, CommunityArtY, CommunityArtSize,
+            Art(R.drawable.ic_community, CommunityArtX, CommunityArtY, CommunityArtSize,
                 Modifier.drawWithContent {
                     clipRect(heartLeft.dp.toPx(), heartTop.dp.toPx(),
                         (heartLeft + heartWidth).dp.toPx(), (heartTop + heartHeight).dp.toPx(),
@@ -486,8 +431,7 @@ internal fun CommunityIcon(
             val float = sin(PI * t).toFloat()
             // Two heartbeats while it floats up, then it settles back into place.
             val beat = 1f + .26f * heartPulse(t, .32f) + .18f * heartPulse(t, .56f)
-            CroppedArt(
-                R.drawable.ic_community, CommunityArtX + heartLeft, CommunityArtY + heartTop,
+            CroppedArt(R.drawable.ic_community, CommunityArtX + heartLeft, CommunityArtY + heartTop,
                 heartWidth, heartHeight, CommunityHeartSource, CommunityHeartSize,
                 Modifier.graphicsLayer {
                     transformOrigin = TransformOrigin(.5f, .38f)
@@ -538,8 +482,7 @@ internal fun iconBounce(progress: Float): Float = when {
 @Composable
 private fun BoxScope.FacilityLayers(progress: Float) {
     Art(R.drawable.ic_book_facility_no_ball, 17f, 1f, 82f)
-    Art(
-        R.drawable.ic_book_facility_ball, 17f, 53f, 30f,
+    Art(R.drawable.ic_book_facility_ball, 17f, 53f, 30f,
         Modifier.graphicsLayer { translationY = -iconBounce(progress).dp.toPx() })
 }
 
@@ -553,11 +496,9 @@ private fun BoxScope.VisitorLayers(progress: Float, active: Boolean) {
             val scan = if (progress < .5f) progress * 2f else (1f - progress) * 2f
             val y = inset + scan * (size.height - 2 * inset)
             val opacity = (minOf(progress, 1f - progress) * 12f).coerceIn(0f, 1f)
-            drawLine(
-                MarinaSosRed.copy(alpha = opacity * .3f),
+            drawLine(MarinaSosRed.copy(alpha = opacity * .3f),
                 Offset(inset, y), Offset(size.width - inset, y), 5.dp.toPx(), StrokeCap.Round)
-            drawLine(
-                MarinaSosRed.copy(alpha = opacity),
+            drawLine(MarinaSosRed.copy(alpha = opacity),
                 Offset(inset, y), Offset(size.width - inset, y), 1.2.dp.toPx(), StrokeCap.Round)
         }
     }
@@ -585,8 +526,7 @@ private fun BoxScope.FormLayers(progress: Float, active: Boolean) {
         val length = writing * writeLength
         if (active && !isMovingBack && fadeOut < 1f) {
             val start = strokeRadius.dp.toPx()
-            drawLine(
-                MarinaSosRed.copy(alpha = 1f - fadeOut),
+            drawLine(MarinaSosRed.copy(alpha = 1f - fadeOut),
                 Offset(start, size.height / 2), Offset(start + length.dp.toPx(), size.height / 2),
                 (2 * strokeRadius).dp.toPx(), StrokeCap.Round)
         }

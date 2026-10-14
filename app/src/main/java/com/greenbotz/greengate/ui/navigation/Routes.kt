@@ -1,5 +1,8 @@
 package com.greenbotz.greengate.ui.navigation
 
+import com.greenbotz.greengate.core.facility.transactionId
+import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
 import com.greenbotz.greengate.ui.screens.visitors.InviteType
 
@@ -10,6 +13,7 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Community : Screen("community")
     data object Access : Screen("access")
+    data object Services : Screen("services")
     data object Profile : Screen("profile")
     data object BookFacility : Screen("book_facility")
     data object FacilityAbout : Screen("facility/{id}") {
@@ -57,5 +61,7 @@ private fun bookingPath(facilityId: String, day: BookingDay, hour: Int, guests: 
     "$facilityId/${day.year}-${day.month + 1}-${day.day}/$hour/$guests"
 
 fun isMainTab(route: String?): Boolean {
-    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Access.route, Screen.Profile.route)
+    return route in listOf(Screen.Home.route, Screen.Community.route, Screen.Services.route, Screen.Access.route, Screen.Profile.route) ||
+        // Theme 3's bottom bar has an Updates tab that opens announcements.
+        (AppPreferences.theme == AppTheme.THREE && route == Screen.Announcements.route)
 }

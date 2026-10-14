@@ -1,12 +1,12 @@
 package com.greenbotz.greengate.ui.screens.profile
 
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,17 +32,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.ui.screens.home.LayeredActionIcon
-import com.greenbotz.greengate.ui.screens.home.LayeredIconSetOne
+import com.greenbotz.greengate.ui.screens.home.LayeredIconSetZero
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
 import com.greenbotz.greengate.ui.theme.DMSans
 
@@ -93,7 +93,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    val useIconSet = AppPreferences.theme == AppTheme.ONE || !AppPreferences.useReferenceArtwork
+                    val useIconSet = AppPreferences.theme != AppTheme.ZERO || !AppPreferences.useReferenceArtwork
                     if (AppPreferences.theme == AppTheme.ZERO) {
                         IconSetOption(
                             title = "Design artwork",
@@ -111,7 +111,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         selected = useIconSet && AppPreferences.iconSet == IconSet.ZERO,
                         onClick = { AppPreferences.setIconSet(context, IconSet.ZERO) }
                     ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp), IconSet.ZERO)
+                        LayeredIconSetZero(0, 0f, false, Modifier.size(40.dp), IconSet.ZERO)
                     }
                     HorizontalDivider(color = Color(0xFFEDEAE0))
                     IconSetOption(
@@ -120,16 +120,7 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         selected = useIconSet && AppPreferences.iconSet == IconSet.CLAY,
                         onClick = { AppPreferences.setIconSet(context, IconSet.CLAY) }
                     ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp), IconSet.CLAY)
-                    }
-                    HorizontalDivider(color = Color(0xFFEDEAE0))
-                    IconSetOption(
-                        title = "Icon Set 1",
-                        subtitle = "Photo-style illustrated icons",
-                        selected = useIconSet && AppPreferences.iconSet == IconSet.ONE,
-                        onClick = { AppPreferences.setIconSet(context, IconSet.ONE) }
-                    ) {
-                        LayeredIconSetOne(0, 0f, false, Modifier.size(40.dp))
+                        LayeredIconSetZero(0, 0f, false, Modifier.size(40.dp), IconSet.CLAY)
                     }
                     HorizontalDivider(color = Color(0xFFEDEAE0))
                     IconSetOption(
@@ -166,6 +157,8 @@ fun ProfileScreen(navController: NavController, onLogout: () -> Unit = {}) {
                         val title = when (theme) {
                             AppTheme.ZERO -> "Theme 0 - Glass"
                             AppTheme.ONE -> "Theme 1 - Classic"
+                            AppTheme.TWO -> "Theme 2 - Fresh"
+                            AppTheme.THREE -> "Theme 3 - Meadow"
                         }
                         Row(Modifier.fillMaxWidth().selectable(
                             selected = AppPreferences.theme == theme,

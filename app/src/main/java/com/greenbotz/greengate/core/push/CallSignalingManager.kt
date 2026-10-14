@@ -6,14 +6,14 @@ import com.greenbotz.greengate.core.call.ReceiverCallController
 import com.greenbotz.greengate.core.call.provider.CallProvider
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
 import com.greenbotz.greengate.core.call.provider.SharedCallConfig
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
 
 class CallSignalingManager(
     private val context: Context,

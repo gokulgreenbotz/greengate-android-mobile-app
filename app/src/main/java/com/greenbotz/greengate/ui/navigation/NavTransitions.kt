@@ -1,12 +1,13 @@
 package com.greenbotz.greengate.ui.navigation
 
-// Package stays com.greenbotz.greengate until the project-wide
-// "Package name does not match containing directory" fix moves it to ui.navigation.
-
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.navigation.NavBackStackEntry
+
+// Package stays com.greenbotz.greengate until the project-wide
+// "Package name does not match containing directory" fix moves it to ui.navigation.
+
 
 // NavHost's own default, kept for every screen outside the booking flow.
 internal const val NavFadeMillis = 700

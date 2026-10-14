@@ -16,12 +16,12 @@ import androidx.core.app.NotificationCompat
 import com.greenbotz.greengate.MainActivity
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.call.provider.SharedCallConfig
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 
 class CallSignalingService : Service() {
 

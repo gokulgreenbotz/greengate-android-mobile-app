@@ -1,10 +1,34 @@
 package com.greenbotz.greengate.ui.screens.assistant
 
 import android.Manifest
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +38,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,21 +50,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -54,6 +83,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -63,16 +93,19 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.greenbotz.greengate.core.assistant.GreenBotAction
 import com.greenbotz.greengate.core.assistant.GreenBotReply
+import com.greenbotz.greengate.core.assistant.replyToGreenBot
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
-import com.greenbotz.greengate.core.assistant.replyToGreenBot
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
 import com.greenbotz.greengate.ui.theme.DMSans
+import kotlinx.coroutines.launch
 
 // Keep secondary text readable over the pale mint glass without changing its theme hue.
 private val BotSecondaryText: Color
     @Composable get() = MaterialTheme.colorScheme.let { lerp(it.onSurfaceVariant, it.onSurface, .12f) }
+
+private enum class BotPanel { INTRO, CHAT, VOICE }
 
 /** The reference-style assistant lives behind the original home card. */
 @Composable
@@ -84,18 +117,26 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
         Brush.verticalGradient(listOf(colors.surfaceVariant, colors.background))
     val focusManager = LocalFocusManager.current
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     var draft by rememberSaveable { mutableStateOf("") }
     var questions by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var revealedQuestions by rememberSaveable { mutableIntStateOf(questions.size) }
     var voiceMode by rememberSaveable { mutableStateOf(false) }
     var permissionError by remember { mutableStateOf<String?>(null) }
     var pendingSpokenReply by remember { mutableStateOf<String?>(null) }
+    var spokenReplyIndex by remember { mutableIntStateOf(-1) }
+    var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    val panelEntrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { panelEntrance.animateTo(1f, tween(480, easing = FastOutSlowInEasing)) }
 
     val onRecognized by rememberUpdatedState<(String) -> Unit> { question ->
         if (voiceMode && voiceAllowed) {
             val trimmed = question.trim()
             if (trimmed.isNotEmpty()) {
                 questions = ArrayList(questions).apply { add(trimmed) }
+                spokenReplyIndex = questions.lastIndex
                 pendingSpokenReply = replyToGreenBot(trimmed).text
             }
         }
@@ -105,7 +146,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            if (voiceMode && voiceAllowed && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            if (voiceMode && voiceAllowed && !showResetDialog && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                 voice.startListening()
             }
         } else {
@@ -115,6 +156,14 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
 
     DisposableEffect(voice) {
         onDispose { voice.release() }
+    }
+    // Replies play on the media stream, so the volume keys should adjust it here instead of the ringer.
+    DisposableEffect(context) {
+        val activity = generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+            .filterIsInstance<Activity>().firstOrNull()
+        val previous = activity?.volumeControlStream
+        activity?.volumeControlStream = AudioManager.STREAM_MUSIC
+        onDispose { if (activity != null && previous != null) activity.volumeControlStream = previous }
     }
     LaunchedEffect(voiceAllowed) {
         if (!voiceAllowed) {
@@ -144,14 +193,17 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
             pendingSpokenReply = null
         }
     }
-    LaunchedEffect(questions.size, keyboardVisible, voiceMode) {
+    LaunchedEffect(questions.size, voiceMode) {
         if (!voiceMode && questions.isNotEmpty()) listState.animateScrollToItem(questions.size)
     }
 
-    fun sendQuestion() {
-        val trimmed = draft.trim()
+    fun sendQuestion(question: String) {
+        val trimmed = question.trim()
         if (trimmed.isEmpty()) return
         voice.cancel()
+        pendingSpokenReply = null
+        permissionError = null
+        voice.clearError()
         questions = ArrayList(questions).apply { add(trimmed) }
         draft = ""
     }
@@ -181,7 +233,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     }
 
     fun toggleMicrophone() {
-        if (!voiceAllowed || voice.isProcessing) return
+        if (!voiceAllowed || !voiceMode || voice.isProcessing) return
         permissionError = null
         voice.clearError()
         if (voice.isListening) {
@@ -196,167 +248,366 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     fun goBack() {
         pendingSpokenReply = null
         voice.cancel()
+        focusManager.clearFocus()
         navController.popBackStack()
     }
-    BackHandler(enabled = voiceAllowed, onBack = ::goBack)
+    BackHandler(enabled = voiceAllowed && !keyboardVisible, onBack = ::goBack)
 
-    Column(
-        Modifier.fillMaxSize().background(backdrop)
-            .consumeWindowInsets(WindowInsets.navigationBars).imePadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        BotTopBar(
-            onBack = ::goBack,
-            canReset = questions.isNotEmpty(),
-            onReset = {
-                voice.cancel()
-                pendingSpokenReply = null
-                permissionError = null
-                questions = arrayListOf()
-                draft = ""
-                focusManager.clearFocus()
-            }
+    fun copyReply(text: String) {
+        ContextCompat.getSystemService(context, ClipboardManager::class.java)
+            ?.setPrimaryClip(ClipData.newPlainText("Green Bot reply", text))
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            scope.launch { snackbar.showSnackbar("Reply copied") }
+        }
+    }
+
+    fun readReply(index: Int, text: String) {
+        if (!voiceAllowed) return
+        pendingSpokenReply = null
+        if (voice.isSpeaking && spokenReplyIndex == index) {
+            voice.cancel()
+        } else {
+            spokenReplyIndex = index
+            voice.speak(text)
+        }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            icon = { Icon(Icons.Outlined.RestartAlt, null, tint = colors.primary) },
+            title = { Text("Start a new chat?", fontFamily = DMSans) },
+            text = { Text("This clears this conversation and your unsent message.", fontFamily = DMSans) },
+            confirmButton = {
+                TextButton(onClick = {
+                    voice.cancel()
+                    voice.clearError()
+                    pendingSpokenReply = null
+                    permissionError = null
+                    questions = arrayListOf()
+                    revealedQuestions = 0
+                    draft = ""
+                    spokenReplyIndex = -1
+                    showResetDialog = false
+                    focusManager.clearFocus()
+                }) { Text("New chat", fontFamily = DMSans, color = colors.primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Keep chatting", fontFamily = DMSans, color = colors.primary) }
+            },
+            containerColor = colors.surface.copy(alpha = 1f),
+            shape = RoundedCornerShape(28.dp)
         )
-        Surface(
-            Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 44.dp, topEnd = 44.dp),
-            color = colors.surface.copy(alpha = .76f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = .8f)),
-            shadowElevation = 6.dp
-        ) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val orbSize = (maxHeight * .30f).coerceIn(130.dp, 210.dp)
-                Column(
-                    Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
-                        colors.surfaceVariant.copy(alpha = .62f), colors.background.copy(alpha = .78f)
-                    ))),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (voiceMode || questions.isEmpty()) {
-                        Column(
-                            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                                .padding(horizontal = 24.dp, vertical = 28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            BotHeading()
-                            Spacer(Modifier.height(22.dp))
-                            GreenBotOrb(
-                                Modifier.size(orbSize),
-                                listening = voice.isListening,
-                                speaking = voice.isSpeaking || voice.isProcessing,
-                                level = voice.level
-                            )
-                            Spacer(Modifier.height(22.dp))
-                            val status = when {
-                                voice.isListening -> "I'm listening to you..."
-                                voice.isProcessing -> "Preparing your reply..."
-                                voice.isSpeaking -> "Green Bot is speaking..."
-                                voiceMode -> "Tap the microphone. I'm here to listen."
-                                else -> "I'm here to help you."
-                            }
-                            Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                                fontFamily = DMSans, fontSize = 15.sp, lineHeight = 23.sp,
-                                color = BotSecondaryText, textAlign = TextAlign.Center)
-                            if (voiceMode) {
-                                if (voice.partialText.isNotBlank() && voice.isListening) {
-                                    Spacer(Modifier.height(16.dp))
-                                    Text(voice.partialText, fontFamily = DMSans, fontSize = 15.sp,
-                                        lineHeight = 22.sp, textAlign = TextAlign.Center, color = colors.onSurface)
-                                } else if (questions.isNotEmpty()) {
-                                    Spacer(Modifier.height(22.dp))
-                                    BotVoiceReply(questions.last(),
-                                        replyToGreenBot(questions.last()), ::openAction)
+    }
+
+    Box(
+        Modifier.fillMaxSize().background(backdrop)
+            .consumeWindowInsets(WindowInsets.navigationBars).imePadding()
+    ) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            BotTopBar(
+                onClose = ::goBack,
+                canReset = questions.isNotEmpty() || draft.isNotBlank(),
+                speaking = voice.isSpeaking,
+                onReset = {
+                    voice.cancel()
+                    pendingSpokenReply = null
+                    focusManager.clearFocus()
+                    showResetDialog = true
+                }
+            )
+            BotModeSwitch(voiceMode, ::selectMode)
+            Surface(
+                Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth().graphicsLayer {
+                    alpha = panelEntrance.value
+                    translationY = (1f - panelEntrance.value) * 14.dp.toPx()
+                },
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                color = colors.surface.copy(alpha = .48f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = .72f))
+            ) {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                        val panelHeight = maxHeight
+                        val panelTarget = when {
+                            voiceMode -> BotPanel.VOICE
+                            questions.isEmpty() -> BotPanel.INTRO
+                            else -> BotPanel.CHAT
+                        }
+                        AnimatedContent(
+                            targetState = panelTarget, modifier = Modifier.fillMaxSize(),
+                            transitionSpec = {
+                                (fadeIn(tween(300, delayMillis = 70)) + slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it / 24 })
+                                    .togetherWith(fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it / 40 })
+                                    .using(SizeTransform(clip = false))
+                            },
+                            label = "Assistant panel"
+                        ) { shownPanel ->
+                            val shownVoice = shownPanel == BotPanel.VOICE
+                            Box(Modifier.fillMaxSize()) {
+                                if (shownPanel != BotPanel.CHAT) {
+                                    val compactVoice = shownVoice && questions.isNotEmpty() && !voice.isListening && !voice.isProcessing
+                                    val targetOrbSize = if (compactVoice) 96.dp
+                                        else if (shownVoice) (panelHeight * .34f).coerceIn(120.dp, 200.dp)
+                                        else (panelHeight * .30f).coerceIn(100.dp, 176.dp)
+                                    val orbSize by animateDpAsState(
+                                        targetOrbSize, spring(dampingRatio = .9f, stiffness = Spring.StiffnessLow),
+                                        label = "Assistant size"
+                                    )
+                                    Column(
+                                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                                            .padding(horizontal = 24.dp, vertical = 24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        GreenBotOrb(
+                                            Modifier.size(orbSize), listening = voice.isListening,
+                                            speaking = voice.isSpeaking, level = voice.level, processing = voice.isProcessing
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        BotHeading(shownVoice, voice.isListening, voice.isProcessing, voice.isSpeaking, compactVoice)
+                                        if (shownVoice) {
+                                            if (voice.partialText.isNotBlank() && (voice.isListening || voice.isProcessing)) {
+                                                Spacer(Modifier.height(20.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(18.dp),
+                                                    color = colors.surface.copy(alpha = .85f),
+                                                    border = BorderStroke(1.dp, colors.primary.copy(alpha = .09f))
+                                                ) {
+                                                    Text(
+                                                        voice.partialText, Modifier.fillMaxWidth().padding(16.dp),
+                                                        fontFamily = DMSans, fontSize = 16.sp, lineHeight = 24.sp,
+                                                        textAlign = TextAlign.Center, color = colors.onSurface
+                                                    )
+                                                }
+                                            } else if (questions.isNotEmpty()) {
+                                                Spacer(Modifier.height(16.dp))
+                                                BotVoiceReply(
+                                                    questions.last(), replyToGreenBot(questions.last()),
+                                                    ::openAction, ::copyReply,
+                                                    speaking = voice.isSpeaking && spokenReplyIndex == questions.lastIndex,
+                                                    onRead = { readReply(questions.lastIndex, replyToGreenBot(questions.last()).text) }
+                                                )
+                                            }
+                                        } else if (!keyboardVisible && draft.isBlank()) {
+                                            Spacer(Modifier.height(28.dp))
+                                            Text(
+                                                "A few things I can help with", Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                                fontFamily = DMSans, fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium, color = BotSecondaryText
+                                            )
+                                            GreenBotQuickPrompts { if (shownPanel == panelTarget) sendQuestion(it) }
+                                        }
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        state = listState, modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                                    ) {
+                                        itemsIndexed(questions, key = { index, _ -> "question-$index" }) { index, question ->
+                                            val reply = replyToGreenBot(question)
+                                            BotConversation(
+                                                question, reply, ::openAction, ::copyReply,
+                                                speaking = voice.isSpeaking && spokenReplyIndex == index,
+                                                onRead = { readReply(index, reply.text) },
+                                                announce = index == questions.lastIndex,
+                                                animateEntry = index >= revealedQuestions,
+                                                onEntryStarted = { if (index < questions.size) revealedQuestions = maxOf(revealedQuestions, index + 1) }
+                                            )
+                                        }
+                                        item(key = "end") { Spacer(Modifier.height(4.dp)) }
+                                    }
+                                    val showLatest by remember { derivedStateOf { listState.canScrollForward } }
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = showLatest,
+                                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
+                                    ) {
+                                        FilledTonalButton(
+                                            onClick = { scope.launch { listState.animateScrollToItem(questions.size) } },
+                                            shape = CircleShape,
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = colors.surface.copy(alpha = 1f), contentColor = colors.primary
+                                            ),
+                                            elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 3.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.ArrowDownward, null, Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Latest message", fontFamily = DMSans, fontSize = 12.sp, color = colors.primary)
+                                        }
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        LazyColumn(
-                            state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 22.dp),
-                            verticalArrangement = Arrangement.spacedBy(18.dp)
-                        ) {
-                            itemsIndexed(questions, key = { index, _ -> "question-$index" }) { _, question ->
-                                BotConversation(question, replyToGreenBot(question), ::openAction)
-                            }
-                            item(key = "end") { Spacer(Modifier.height(4.dp)) }
-                        }
                     }
                     val error = permissionError ?: voice.error
-                    if (error != null) {
-                        Text(error, Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                            .semantics { liveRegion = LiveRegionMode.Polite }, fontFamily = DMSans,
-                            fontSize = 12.sp, lineHeight = 18.sp, color = BotSecondaryText, textAlign = TextAlign.Center)
+                    if (error == null && voice.replyMuted) {
+                        Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                            GreenBotErrorNotice(
+                                message = "Your media volume is off, so you can't hear Green Bot's reply.",
+                                onDismiss = voice::clearError,
+                                onTurnUpVolume = voice::turnUpVolume,
+                                icon = Icons.AutoMirrored.Outlined.VolumeOff
+                            )
+                        }
                     }
-                    BotModeSwitch(voiceMode, ::selectMode)
-                    if (voiceMode) {
-                        BotVoiceControls(voice.isListening, voice.isSpeaking, voice.isProcessing, voiceAllowed,
-                            ::toggleMicrophone, onStopSpeaking = {
-                            pendingSpokenReply = null
-                            voice.cancel()
-                        })
-                    } else {
-                        BotComposer(draft, onDraftChange = { draft = it.take(500) }, onSend = ::sendQuestion)
+                    if (error != null) {
+                        Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                            GreenBotErrorNotice(
+                                message = error,
+                                onDismiss = { permissionError = null; voice.clearError() },
+                                onUseKeyboard = if (voiceMode) ({ selectMode(false) }) else null,
+                                onOpenSettings = if (permissionError != null) ({
+                                    voice.cancel()
+                                    pendingSpokenReply = null
+                                    context.startActivity(Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.parse("package:" + context.packageName)
+                                    ))
+                                }) else null
+                            )
+                        }
+                    }
+                    AnimatedContent(
+                        targetState = voiceMode, modifier = Modifier.fillMaxWidth(),
+                        transitionSpec = {
+                            fadeIn(tween(240, delayMillis = 60)).togetherWith(fadeOut(tween(120)))
+                                .using(SizeTransform(clip = false))
+                        }, label = "Assistant controls"
+                    ) { shownVoice ->
+                        if (shownVoice) {
+                            BotVoiceControls(
+                                voice.isListening, voice.isSpeaking, voice.isProcessing, voiceAllowed && voiceMode,
+                                ::toggleMicrophone,
+                                onCancel = { pendingSpokenReply = null; voice.cancel() }
+                            )
+                        } else {
+                            BotComposer(
+                                draft, onDraftChange = { if (!voiceMode) draft = it.take(500) },
+                                onSend = { if (!voiceMode) sendQuestion(draft) }, onVoice = { selectMode(true) },
+                                enabled = !voiceMode
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BotTopBar(onBack: () -> Unit, canReset: Boolean, onReset: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val buttonModifier = Modifier.size(48.dp)
-        .shadow(4.dp, CircleShape, ambientColor = colors.primary.copy(alpha = .10f),
-            spotColor = colors.primary.copy(alpha = .10f))
-        .clip(CircleShape).background(colors.surface.copy(alpha = .92f))
-        .border(1.dp, Color.White.copy(alpha = .8f), CircleShape)
-    Row(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack, modifier = buttonModifier) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = colors.onSurface)
-        }
-        Text("Green Bot", Modifier.weight(1f), fontFamily = DMSans, fontWeight = FontWeight.SemiBold,
-            fontSize = 22.sp, textAlign = TextAlign.Center, color = colors.onSurface)
-        IconButton(onClick = onReset, enabled = canReset, modifier = buttonModifier) {
-            Icon(Icons.Outlined.RestartAlt, "Start a new chat",
-                tint = BotSecondaryText.copy(alpha = if (canReset) 1f else .35f))
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 112.dp)) { data ->
+            Snackbar(shape = RoundedCornerShape(16.dp), containerColor = colors.onSurface) {
+                Text(data.visuals.message, fontFamily = DMSans, color = colors.surface.copy(alpha = 1f))
+            }
         }
     }
 }
 
 @Composable
-private fun BotHeading() {
+private fun BotTopBar(onClose: () -> Unit, canReset: Boolean, speaking: Boolean, onReset: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("I'm your Green Bot", fontFamily = DMSans, fontSize = 16.sp, lineHeight = 24.sp,
+    Row(
+        Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BotMark(Modifier.size(44.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Green Bot", fontFamily = DMSans, fontWeight = FontWeight.SemiBold,
+                fontSize = 21.sp, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (speaking) "Reading your reply..." else "Your community guide",
+                fontFamily = DMSans, fontSize = 12.sp, color = BotSecondaryText,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (canReset) {
+            IconButton(onClick = onReset, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Outlined.RestartAlt, "Start a new chat", Modifier.size(22.dp), tint = BotSecondaryText)
+            }
+        }
+        IconButton(
+            onClick = onClose, modifier = Modifier.size(48.dp)
+                .clip(CircleShape).background(colors.surface.copy(alpha = .85f))
+                .border(1.dp, Color.White.copy(alpha = .8f), CircleShape)
+        ) {
+            Icon(Icons.Rounded.Close, "Close Green Bot", Modifier.size(22.dp), tint = colors.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun BotMark(modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier.clip(RoundedCornerShape(15.dp))
+            .background(Brush.linearGradient(listOf(colors.primary, lerp(colors.primary, Color.White, .22f)))),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(23.dp), tint = colors.onPrimary)
+    }
+}
+
+@Composable
+private fun BotHeading(voiceMode: Boolean, listening: Boolean, processing: Boolean, speaking: Boolean, compact: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val title = when {
+        !voiceMode -> "How can I help you?"
+        listening -> "I'm listening"
+        processing -> "Got it. One moment..."
+        speaking -> "Here's a little help"
+        compact -> "Ready when you are"
+        else -> "Let's talk"
+    }
+    val subtitle = when {
+        !voiceMode -> "A little guidance for everyday life at home."
+        listening -> "Speak naturally. Tap the mic when you're done."
+        processing -> "Turning your words into a reply."
+        speaking -> "You can stop the reply at any time."
+        else -> "Ask about your home or community."
+    }
+    Text(title, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        fontFamily = DMSans, fontWeight = FontWeight.SemiBold, fontSize = if (compact) 22.sp else 26.sp,
+        lineHeight = if (compact) 30.sp else 34.sp, color = colors.onSurface, textAlign = TextAlign.Center)
+    if (!compact) {
+        Spacer(Modifier.height(8.dp))
+        Text(subtitle, fontFamily = DMSans, fontSize = 14.sp, lineHeight = 21.sp,
             color = BotSecondaryText, textAlign = TextAlign.Center)
-        Text("How can I help you?", fontFamily = DMSans, fontWeight = FontWeight.Medium,
-            fontSize = 27.sp, lineHeight = 35.sp, color = colors.onSurface, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 private fun BotModeSwitch(voiceMode: Boolean, onModeChange: (Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Row(Modifier.padding(top = 8.dp, bottom = 16.dp).clip(CircleShape)
-        .background(colors.surface.copy(alpha = .72f))
-        .border(1.dp, Color.White.copy(alpha = .85f), CircleShape).padding(4.dp)) {
-        listOf(false to "Chat", true to "Voice").forEach { (useVoice, label) ->
-            val selected = useVoice == voiceMode
-            Row(
-                Modifier.widthIn(min = 96.dp).heightIn(min = 44.dp).clip(CircleShape)
-                    .background(if (selected) colors.primary else Color.Transparent)
-                    .selectable(selected = selected, role = Role.Tab, onClick = { onModeChange(useVoice) })
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(if (useVoice) Icons.Outlined.Mic else Icons.AutoMirrored.Outlined.Chat,
-                    null, Modifier.size(18.dp), tint = if (selected) colors.onPrimary else BotSecondaryText)
-                Spacer(Modifier.width(7.dp))
-                Text(label, fontFamily = DMSans, fontSize = 13.sp,
-                    color = if (selected) colors.onPrimary else BotSecondaryText)
+    BoxWithConstraints(
+        Modifier.padding(horizontal = 24.dp).padding(bottom = 18.dp).widthIn(max = 360.dp)
+            .fillMaxWidth().clip(CircleShape).background(colors.surface.copy(alpha = .55f))
+            .border(1.dp, Color.White.copy(alpha = .75f), CircleShape)
+            .selectableGroup().padding(4.dp)
+    ) {
+        val segmentWidth = maxWidth / 2
+        val selectionOffset by animateDpAsState(
+            if (voiceMode) segmentWidth else 0.dp,
+            spring(dampingRatio = .88f, stiffness = Spring.StiffnessMediumLow), label = "Selected mode"
+        )
+        Box(Modifier.matchParentSize()) {
+            Box(Modifier.offset(x = selectionOffset).width(segmentWidth).fillMaxHeight()
+                .background(colors.primary, CircleShape))
+        }
+        Row(Modifier.fillMaxWidth()) {
+            listOf(false to "Chat", true to "Voice").forEach { (useVoice, label) ->
+                val selected = useVoice == voiceMode
+                val contentColor by animateColorAsState(
+                    if (selected) colors.onPrimary else BotSecondaryText,
+                    tween(220), label = "Mode label"
+                )
+                Row(
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(CircleShape)
+                        .selectable(selected = selected, role = Role.Tab, onClick = { onModeChange(useVoice) })
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(if (useVoice) Icons.Outlined.Mic else Icons.AutoMirrored.Outlined.Chat,
+                        null, Modifier.size(18.dp), tint = contentColor)
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, fontFamily = DMSans, fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp, color = contentColor)
+                }
             }
         }
     }
@@ -365,81 +616,161 @@ private fun BotModeSwitch(voiceMode: Boolean, onModeChange: (Boolean) -> Unit) {
 @Composable
 private fun BotVoiceControls(
     listening: Boolean, speaking: Boolean, processing: Boolean, enabled: Boolean,
-    onMicrophone: () -> Unit, onStopSpeaking: () -> Unit
+    onMicrophone: () -> Unit, onCancel: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
+            .padding(horizontal = 24.dp).padding(top = 10.dp, bottom = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.size(100.dp).background(colors.primary.copy(alpha = .07f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
             FilledIconButton(
-                onClick = onMicrophone, enabled = enabled && !processing, modifier = Modifier.size(68.dp),
+                onClick = onMicrophone, enabled = enabled && !processing, modifier = Modifier.size(76.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = colors.primary, contentColor = colors.onPrimary,
                     disabledContainerColor = colors.primary.copy(alpha = .18f),
-                    disabledContentColor = BotSecondaryText)
+                    disabledContentColor = colors.primary
+                )
             ) {
                 if (processing) {
-                    CircularProgressIndicator(Modifier.size(26.dp), color = colors.primary, strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.size(28.dp), color = colors.primary, strokeWidth = 2.dp)
                 } else {
                     Icon(if (listening) Icons.Outlined.StopCircle else Icons.Outlined.Mic,
-                        if (listening) "Finish speaking" else "Start voice input", Modifier.size(30.dp))
-                }
-            }
-            if (speaking) {
-                IconButton(onClick = onStopSpeaking) {
-                    Icon(Icons.AutoMirrored.Outlined.VolumeOff, "Stop spoken reply", tint = BotSecondaryText)
+                        if (listening) "Finish speaking" else "Start voice input", Modifier.size(32.dp))
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Text(when {
-            listening -> "Tap to finish"
-            processing -> "Getting your words ready"
-            speaking -> "Tap the mic to speak again"
-            else -> "Tap to speak"
-        }, fontFamily = DMSans, fontSize = 12.sp, color = BotSecondaryText)
-        Spacer(Modifier.height(14.dp))
-    }
-}
-
-@Composable
-private fun BotVoiceReply(question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(20.dp), color = colors.surface.copy(alpha = .76f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = .85f))) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("You: $question", fontFamily = DMSans, fontSize = 12.sp, lineHeight = 18.sp,
-                color = BotSecondaryText)
-            SelectionContainer {
-                Text(reply.text, fontFamily = DMSans, fontSize = 14.sp, lineHeight = 22.sp, color = colors.onSurface)
+        if (listening || processing || speaking) {
+            TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) {
+                if (speaking) {
+                    Icon(Icons.AutoMirrored.Outlined.VolumeOff, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(if (speaking) "Stop reply" else "Cancel", fontFamily = DMSans, fontSize = 13.sp, color = colors.primary)
             }
-            reply.action?.let { BotActionButton(it, onAction) }
+        } else {
+            Text("Tap to speak", Modifier.padding(top = 8.dp), fontFamily = DMSans,
+                fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.primary)
+            Text("Microphone stays off until you tap.", Modifier.padding(top = 4.dp),
+                fontFamily = DMSans, fontSize = 11.sp, color = BotSecondaryText, textAlign = TextAlign.Center)
         }
     }
 }
 
 @Composable
-private fun BotConversation(question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit) {
+private fun BotVoiceReply(
+    question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit,
+    onCopy: (String) -> Unit, speaking: Boolean, onRead: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(Modifier.align(Alignment.End).fillMaxWidth(.88f),
-            shape = RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp), color = colors.primary) {
+    Surface(
+        shape = RoundedCornerShape(22.dp), color = colors.surface.copy(alpha = .88f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = .9f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            Text("YOU ASKED", fontFamily = DMSans, fontSize = 9.sp, letterSpacing = 1.sp, color = BotSecondaryText)
+            Text(question, Modifier.padding(top = 6.dp, bottom = 16.dp), fontFamily = DMSans,
+                fontSize = 14.sp, lineHeight = 21.sp, color = BotSecondaryText)
             SelectionContainer {
-                Text(question, Modifier.padding(horizontal = 16.dp, vertical = 13.dp), fontFamily = DMSans,
-                    fontSize = 14.sp, lineHeight = 21.sp, color = colors.onPrimary)
+                Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
             }
+            reply.action?.let { Spacer(Modifier.height(12.dp)); BotActionButton(it, onAction) }
+            BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
         }
-        Surface(Modifier.fillMaxWidth(.94f).semantics { liveRegion = LiveRegionMode.Polite },
-            shape = RoundedCornerShape(5.dp, 20.dp, 20.dp, 20.dp), color = colors.surface.copy(alpha = .76f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = .85f))) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("GREEN BOT", fontFamily = DMSans, fontSize = 9.sp, letterSpacing = 1.2.sp,
-                    fontWeight = FontWeight.Medium, color = colors.primary)
+    }
+}
+
+@Composable
+private fun BotConversation(
+    question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit,
+    onCopy: (String) -> Unit, speaking: Boolean, onRead: () -> Unit, announce: Boolean,
+    animateEntry: Boolean, onEntryStarted: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    // Consume entry motion immediately so scrolling or changing modes never replays old messages.
+    LaunchedEffect(Unit) { if (animateEntry) onEntryStarted() }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        BotMessageEnter(animateEntry, modifier = Modifier.align(Alignment.End)) {
+            Surface(
+                Modifier.widthIn(min = 48.dp, max = 360.dp),
+                shape = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp), color = colors.primary
+            ) {
                 SelectionContainer {
-                    Text(reply.text, fontFamily = DMSans, fontSize = 14.sp, lineHeight = 22.sp, color = colors.onSurface)
+                    Text(question, Modifier.padding(horizontal = 18.dp, vertical = 14.dp), fontFamily = DMSans,
+                        fontSize = 15.sp, lineHeight = 23.sp, color = colors.onPrimary)
                 }
-                reply.action?.let { BotActionButton(it, onAction) }
             }
+        }
+        BotMessageEnter(animateEntry, delayMillis = 90, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BotMark(Modifier.size(28.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Green Bot", fontFamily = DMSans, fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium, color = BotSecondaryText)
+                }
+                Surface(
+                    Modifier.fillMaxWidth().then(if (announce) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
+                    shape = RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp),
+                    color = colors.surface.copy(alpha = .9f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .9f))
+                ) {
+                    Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 4.dp)) {
+                        SelectionContainer {
+                            Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
+                        }
+                        reply.action?.let { Spacer(Modifier.height(14.dp)); BotActionButton(it, onAction) }
+                        BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BotMessageEnter(
+    animate: Boolean, modifier: Modifier = Modifier, delayMillis: Int = 0, content: @Composable () -> Unit
+) {
+    val progress = remember { Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (progress.value < 1f) {
+            progress.animateTo(1f, tween(380, delayMillis, FastOutSlowInEasing))
+        }
+    }
+    Box(modifier.graphicsLayer {
+        alpha = progress.value
+        translationY = (1f - progress.value) * 14.dp.toPx()
+        scaleX = .985f + .015f * progress.value
+        scaleY = scaleX
+    }) { content() }
+}
+
+@Composable
+private fun BotReplyTools(speaking: Boolean, onCopy: () -> Unit, onRead: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(
+            onClick = onCopy, contentPadding = PaddingValues(horizontal = 8.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = BotSecondaryText)
+        ) {
+            Icon(Icons.Outlined.ContentCopy, null, Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Copy", fontFamily = DMSans, fontSize = 12.sp, color = BotSecondaryText)
+        }
+        TextButton(
+            onClick = onRead, contentPadding = PaddingValues(horizontal = 8.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = if (speaking) colors.primary else BotSecondaryText)
+        ) {
+            Icon(if (speaking) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
+                null, Modifier.size(17.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(if (speaking) "Stop" else "Listen", fontFamily = DMSans, fontSize = 12.sp,
+                color = if (speaking) colors.primary else BotSecondaryText)
         }
     }
 }
@@ -447,53 +778,81 @@ private fun BotConversation(question: String, reply: GreenBotReply, onAction: (G
 @Composable
 private fun BotActionButton(action: GreenBotAction, onAction: (GreenBotAction) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    OutlinedButton(onClick = { onAction(action) }, shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.primary.copy(alpha = .28f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+    OutlinedButton(
+        onClick = { onAction(action) }, shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.heightIn(min = 48.dp),
+        border = BorderStroke(1.dp, colors.primary.copy(alpha = .18f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = colors.primary, containerColor = colors.primary.copy(alpha = .035f)
+        ),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    ) {
         Text(action.buttonLabel(), Modifier.weight(1f, fill = false), fontFamily = DMSans,
             fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.primary)
         Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(16.dp), tint = colors.primary)
+        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(16.dp))
     }
 }
 
 @Composable
-private fun BotComposer(draft: String, onDraftChange: (String) -> Unit, onSend: () -> Unit) {
+private fun BotComposer(
+    draft: String, onDraftChange: (String) -> Unit, onSend: () -> Unit, onVoice: () -> Unit, enabled: Boolean
+) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(36.dp), color = colors.surface.copy(alpha = .88f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = .9f)), shadowElevation = 2.dp) {
-            Row(Modifier.padding(start = 22.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
-                verticalAlignment = Alignment.CenterVertically) {
+    Column(
+        Modifier.fillMaxWidth().background(colors.background.copy(alpha = .55f))
+            .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
+            color = colors.surface.copy(alpha = 1f),
+            border = BorderStroke(1.dp, colors.primary.copy(alpha = .12f)),
+            shadowElevation = 2.dp
+        ) {
+            Row(
+                Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
                 BasicTextField(
-                    value = draft, onValueChange = onDraftChange,
-                    modifier = Modifier.weight(1f).padding(vertical = 10.dp)
-                        .semantics { contentDescription = "Message Green Bot" }, maxLines = 4,
+                    value = draft, onValueChange = onDraftChange, enabled = enabled,
+                    modifier = Modifier.weight(1f).padding(vertical = 14.dp)
+                        .semantics { contentDescription = "Message Green Bot" },
+                    maxLines = 4,
                     textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, lineHeight = 22.sp, color = colors.onSurface),
                     cursorBrush = SolidColor(colors.primary),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { onSend() }),
                     decorationBox = { field ->
                         Box {
-                            if (draft.isEmpty()) Text("Type your queries", fontFamily = DMSans,
+                            if (draft.isEmpty()) Text("Ask Green Bot...", fontFamily = DMSans,
                                 fontSize = 15.sp, lineHeight = 22.sp, color = BotSecondaryText)
                             field()
                         }
                     }
                 )
-                Spacer(Modifier.width(8.dp))
-                FilledIconButton(onClick = onSend, enabled = draft.isNotBlank(), modifier = Modifier.size(50.dp),
+                IconButton(onClick = onVoice, enabled = enabled, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Outlined.Mic, "Switch to voice mode", Modifier.size(22.dp), tint = BotSecondaryText)
+                }
+                FilledIconButton(
+                    onClick = onSend, enabled = enabled && draft.isNotBlank(), modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = colors.primary, contentColor = colors.onPrimary,
-                        disabledContainerColor = colors.primary.copy(alpha = .14f),
-                        disabledContentColor = colors.primary.copy(alpha = .45f))) {
-                    Icon(Icons.AutoMirrored.Filled.Send, "Send message", Modifier.size(24.dp))
+                        disabledContainerColor = colors.primary.copy(alpha = .10f),
+                        disabledContentColor = colors.primary.copy(alpha = .4f)
+                    )
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, "Send message", Modifier.size(21.dp))
                 }
             }
         }
-        Spacer(Modifier.height(20.dp))
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Your guide to GreenGate", fontFamily = DMSans, fontSize = 10.sp, color = BotSecondaryText)
+            if (draft.length >= 400) {
+                Text(draft.length.toString() + "/500", fontFamily = DMSans, fontSize = 10.sp,
+                    color = if (draft.length == 500) colors.error else BotSecondaryText)
+            }
+        }
     }
 }
 

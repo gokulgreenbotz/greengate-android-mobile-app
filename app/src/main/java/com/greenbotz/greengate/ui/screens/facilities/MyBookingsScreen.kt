@@ -48,7 +48,7 @@ internal fun MyBookingsScreen(navController: NavController) {
     Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar("My Bookings", onBack = { navController.popBackStack() }) {
-                GlassIconButton(Icons.Outlined.ReceiptLong, "Payments and deposits") {
+                FoldingLabelButton(Icons.Outlined.ReceiptLong, "Payments") {
                     navController.navigate(Screen.Payments.route)
                 }
             }
@@ -203,16 +203,16 @@ private fun BookingCard(booking: Booking, now: Long, onQr: () -> Unit, onDetails
     }
 }
 
-/** e.g. "S$16 paid · S$8 deposit (Held)", with the deposit coloured by its state. */
+/** e.g. "$16 paid · $8 deposit (Held)", with the deposit coloured by its state. */
 private fun paidLine(booking: Booking, now: Long) = buildAnnotatedString {
     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-        append(if (booking.total > 0) "S$${booking.total} paid" else "No payment")
+        append(if (booking.total > 0) "$${booking.total} paid" else "No payment")
     }
     if (booking.deposit > 0) {
         val refunded = booking.isRefunded(now)
         append("  ·  ")
         withStyle(SpanStyle(color = if (refunded) FacilityGreen else FacilityOrange, fontWeight = FontWeight.SemiBold)) {
-            append("S$${booking.deposit}")
+            append("$${booking.deposit}")
         }
         withStyle(SpanStyle(color = FacilityMuted)) { append(if (refunded) " deposit (Refunded)" else " deposit (Held)") }
     }

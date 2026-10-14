@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.theme.DMSans
@@ -225,7 +226,7 @@ private fun PaymentSummaryCard(deposit: Int, bookingFee: Int, tax: Int, total: I
             HorizontalDivider(color = PaymentDivider.copy(alpha = .2f))
             Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Total", Modifier.weight(1f), fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-                Text("S$$total", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+                Text("$$total", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
             }
         }
     }
@@ -237,7 +238,7 @@ private fun ChargeRow(icon: ImageVector, label: String, amount: Int) {
         Icon(icon, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(16.dp))
         Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted)
-        Text("S$$amount", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+        Text("$$amount", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
     }
 }
 
@@ -330,7 +331,7 @@ private fun DepositNote(deposit: Int) {
             Column {
                 Text("Refundable security deposit", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
                 Text(
-                    "The deposit of S$$deposit is fully refundable after your booking and subject to our facility terms.",
+                    "The deposit of $$deposit is fully refundable after your booking and subject to our facility terms.",
                     fontFamily = DMSans, fontSize = 13.sp, lineHeight = 18.sp, color = FacilityMuted
                 )
             }
@@ -351,7 +352,7 @@ private fun CheckoutBar(total: Int, onConfirm: () -> Unit) {
     ) {
         Column(Modifier.padding(end = 14.dp)) {
             Text("Total", fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
-            Text("S$$total", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+            Text("$$total", fontFamily = DMSans, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
         }
         Box(Modifier.width(1.dp).height(44.dp).background(PaymentDivider))
         Spacer(Modifier.width(14.dp))

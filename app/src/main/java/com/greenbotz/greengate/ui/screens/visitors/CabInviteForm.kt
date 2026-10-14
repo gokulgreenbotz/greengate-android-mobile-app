@@ -27,9 +27,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,28 +46,34 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
+import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
+import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
+import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
 import com.greenbotz.greengate.ui.screens.facilities.MonthCalendar
 import com.greenbotz.greengate.ui.screens.facilities.QuickDayChips
 import com.greenbotz.greengate.ui.screens.facilities.clockLabel
+import com.greenbotz.greengate.ui.screens.facilities.themed
+import com.greenbotz.greengate.ui.theme.BackgroundCream
 import com.greenbotz.greengate.ui.theme.DMSans
 import java.util.Calendar
 
+// Fields come from InviteFields.kt; these style the tabs and chips around them.
 private val CabFieldShape = RoundedCornerShape(14.dp)
-private val CabFieldBorder = Color(0xFFE3ECE9)
-private val CabSelectedFill = Color(0xFFE7F6F0)
-private val CabErrorRed = Color(0xFFC2412D)
+private val CabFieldBorder get() = InviteFieldBorder
+private val CabSelectedFill get() = InviteSelectedFill
 
 // TODO: replace the logos cut from the mock-up with the companies' official artwork.
 private enum class CabCompany(val label: String, @DrawableRes val logo: Int?) {
-    GRAB("Grab", _root_ide_package_.com.greenbotz.greengate.R.drawable.cab_co_grab),
-    GOJEK("Gojek", _root_ide_package_.com.greenbotz.greengate.R.drawable.cab_co_gojek),
-    TADA("TADA", _root_ide_package_.com.greenbotz.greengate.R.drawable.cab_co_tada),
-    RYDE("Ryde", _root_ide_package_.com.greenbotz.greengate.R.drawable.cab_co_ryde),
-    CDG("CDG Zig", _root_ide_package_.com.greenbotz.greengate.R.drawable.cab_co_cdg),
+    GRAB("Grab", R.drawable.cab_co_grab),
+    GOJEK("Gojek", R.drawable.cab_co_gojek),
+    TADA("TADA", R.drawable.cab_co_tada),
+    RYDE("Ryde", R.drawable.cab_co_ryde),
+    CDG("CDG Zig", R.drawable.cab_co_cdg),
     OTHER("Other", null),
 }
 
@@ -86,16 +90,12 @@ private val SlotEnds = (1..47).map { it * 30 } + (24 * 60 - 1)
 
 private fun nowMinutes() = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
 
-private fun Calendar.toBookingDay() = BookingDay(
-    get(Calendar.YEAR),
-    get(Calendar.MONTH),
-    get(Calendar.DAY_OF_MONTH)
-)
+private fun Calendar.toBookingDay() = BookingDay(get(Calendar.YEAR), get(Calendar.MONTH), get(Calendar.DAY_OF_MONTH))
 internal fun dayFromToday(offset: Int) = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, offset) }.toBookingDay()
 
 /** Start times for [day]: right now first when it's today, then the half hours still ahead. */
 private fun cabStartTimes(day: BookingDay): List<Int> {
-    if (day != BookingDay.Companion.today()) return SlotStarts
+    if (day != BookingDay.today()) return SlotStarts
     val now = nowMinutes()
     return listOf(now) + SlotStarts.filter { it > now }
 }
@@ -108,7 +108,7 @@ private fun cabStartTimes(day: BookingDay): List<Int> {
 internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Unit) {
     var frequent by remember { mutableStateOf(false) }
     var pickup by remember { mutableStateOf(true) }
-    var day by remember { mutableStateOf(BookingDay.Companion.today()) }
+    var day by remember { mutableStateOf(BookingDay.today()) }
     val startTimes = cabStartTimes(day)
     var startMinutes by remember { mutableIntStateOf(startTimes.first()) }
     if (startMinutes !in startTimes) startMinutes = startTimes.first()
@@ -139,41 +139,24 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
             days.any { WeekDayNumbers[it] == dow }
         }
         val plate = vehicle.trim()
-        val invite = VisitorStore.add(
-            VisitorInvite(
-                id = "",
-                name = if (company == CabCompany.OTHER) "Cab Driver" else "${company.label} Driver",
-                type = InviteType.CAB,
-                relationship = if (pickup) "Pickup" else "Drop",
-                countryCode = "",
-                mobile = "",
-                day = firstDay,
-                startMinutes = if (frequent) slotStart else startMinutes,
-                validHours = if (frequent) ((slotEnd - slotStart) + 59) / 60 else validHours,
-                vehicleRegion = "SG".takeIf { plate.isNotEmpty() },
-                vehicle = plate.ifEmpty { null },
-                visitorCanEditVehicle = false,
-                faceRegistration = false,
-                repeat = if (frequent) "${
-                    days.sorted().joinToString(", ") { WeekDays[it] }
-                } · $validity" else null,
-                notifyOnEntry = notifyOnEntry,
-                maxEntries = if (frequent) entries.first else 1,
-                note = note.trim(),
-                createdAt = System.currentTimeMillis()
-            )
-        )
+        val invite = VisitorStore.add(VisitorInvite(
+            id = "", name = if (company == CabCompany.OTHER) "Cab Driver" else "${company.label} Driver",
+            type = InviteType.CAB, relationship = if (pickup) "Pickup" else "Drop",
+            countryCode = "", mobile = "", day = firstDay,
+            startMinutes = if (frequent) slotStart else startMinutes,
+            validHours = if (frequent) ((slotEnd - slotStart) + 59) / 60 else validHours,
+            vehicleRegion = "SG".takeIf { plate.isNotEmpty() }, vehicle = plate.ifEmpty { null },
+            visitorCanEditVehicle = false, faceRegistration = false,
+            repeat = if (frequent) "${days.sorted().joinToString(", ") { WeekDays[it] }} · $validity" else null,
+            notifyOnEntry = notifyOnEntry, maxEntries = if (frequent) entries.first else 1,
+            note = note.trim(), createdAt = System.currentTimeMillis()
+        ))
         onCreated(invite)
     }
 
     Column(Modifier.fillMaxWidth().imePadding()) {
-        InviteFormHeader(
-            "Invite Cab",
-            "Create a cab invite for pickup or drop",
-            onBack = null,
-            onClose = onClose
-        ) {
-            Image(painterResource(_root_ide_package_.com.greenbotz.greengate.R.drawable.cab_invite_header), null, Modifier.size(60.dp))
+        InviteFormHeader("Invite Cab", "Create a cab invite for pickup or drop", onBack = null, onClose = onClose) {
+            InviteTypeArt(InviteType.CAB, Modifier.requiredSize(72.dp), blend = false)
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.padding(horizontal = 20.dp)) {
@@ -183,8 +166,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label, Modifier.padding(vertical = 10.dp), fontFamily = DMSans, fontSize = 15.sp,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (selected) BookingsDeepGreen else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-                    )
+                        color = if (selected) BookingsDeepGreen else FacilityMuted)
                     Box(Modifier.fillMaxWidth().height(if (selected) 2.5.dp else 1.dp)
                         .background(if (selected) BookingsDeepGreen else CabFieldBorder))
                 }
@@ -192,85 +174,70 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
         }
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
             if (!frequent) {
-                CabLabel("Invite for")
+                InviteLabel("Invite for")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DirectionChip("Pickup", Icons.Rounded.ArrowUpward, pickup, Modifier.weight(1f)) { pickup = true }
                     DirectionChip("Drop", Icons.Rounded.ArrowDownward, !pickup, Modifier.weight(1f)) { pickup = false }
                 }
-                CabLabel("Date")
-                CabField(Icons.Outlined.CalendarMonth, onClick = { pickDate = true }, trailing = Icons.Rounded.ChevronRight, height = 60.dp) {
-                    Column {
-                        Text(quickDayName(day) ?: day.label(), fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
-                        Text("${day.label()} ${day.year}", fontFamily = DMSans, fontSize = 12.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
-                    }
-                }
+                InviteLabel("Date")
+                InviteDateField(day) { pickDate = true }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) {
-                        CabLabel("Start Time")
-                        CabDropdown(Icons.Outlined.Schedule,
-                            clockLabel(startMinutes), startTimes.map {
-                                clockLabel(it)
-                            }) {
+                        InviteLabel("Start Time")
+                        InviteDropdown(Icons.Outlined.Schedule, clockLabel(startMinutes), startTimes.map { clockLabel(it) }) {
                             startMinutes = startTimes[it]
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        CabLabel("Valid for next")
-                        CabDropdown(Icons.Outlined.Schedule, ValidForOptions.first { it.first == validHours }.second,
+                        InviteLabel("Valid for next")
+                        InviteDropdown(Icons.Outlined.Schedule, ValidForOptions.first { it.first == validHours }.second,
                             ValidForOptions.map { it.second }) { validHours = ValidForOptions[it].first }
                     }
                 }
             } else {
-                CabLabel("Select Days of Week")
+                InviteLabel("Select Days of Week")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     WeekDays.forEachIndexed { i, name ->
                         val selected = i in days
                         Box(
                             Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) BookingsDeepGreen else Color(0xFFF2F5F4))
+                                .background(if (selected) BookingsDeepGreen else themed(Color(0xFFF2F5F4), BackgroundCream))
                                 .toggleable(selected, role = Role.Checkbox) { days = if (it) days + i else days - i },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(name, fontFamily = DMSans, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selected) Color.White else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-                            )
+                                color = if (selected) Color.White else FacilityInk)
                         }
                     }
                 }
-                CabError(daysError)
-                CabLabel("Select Validity")
-                CabDropdown(Icons.Outlined.CalendarMonth, validity, ValidityOptions) { validity = ValidityOptions[it] }
-                CabLabel("Select Time Slot")
+                InviteError(daysError)
+                InviteLabel("Select Validity")
+                InviteDropdown(Icons.Outlined.CalendarMonth, validity, ValidityOptions) { validity = ValidityOptions[it] }
+                InviteLabel("Select Time Slot")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CabDropdown(Icons.Outlined.Schedule,
-                        clockLabel(slotStart), SlotStarts.map {
-                            clockLabel(it)
-                        }, Modifier.weight(1f)) {
+                    InviteDropdown(Icons.Outlined.Schedule, clockLabel(slotStart), SlotStarts.map { clockLabel(it) }, Modifier.weight(1f)) {
                         slotStart = SlotStarts[it]
                     }
-                    CabDropdown(Icons.Outlined.Schedule,
-                        clockLabel(slotEnd), SlotEnds.map {
-                            clockLabel(it)
-                        }, Modifier.weight(1f)) {
+                    InviteDropdown(Icons.Outlined.Schedule, clockLabel(slotEnd), SlotEnds.map { clockLabel(it) }, Modifier.weight(1f)) {
                         slotEnd = SlotEnds[it]
                     }
                 }
-                CabError(slotError)
-                CabLabel("Select Entries Per Day")
-                CabDropdown(Icons.Rounded.Repeat, entries.second, EntriesPerDay.map { it.second }) { entries = EntriesPerDay[it] }
+                InviteError(slotError)
+                InviteLabel("Select Entries Per Day")
+                InviteDropdown(Icons.Rounded.Repeat, entries.second, EntriesPerDay.map { it.second }) { entries = EntriesPerDay[it] }
             }
 
             Row(Modifier.padding(top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Vehicle Number", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
-                Icon(Icons.Outlined.Info, null, Modifier.padding(start = 6.dp).size(16.dp), tint = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
+                Text("Vehicle Number", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+                Icon(Icons.Outlined.Info, null, Modifier.padding(start = 6.dp).size(16.dp), tint = FacilityMuted)
             }
-            CabField(Icons.Outlined.DirectionsCar) {
+            InviteField(Icons.Outlined.DirectionsCar) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                    if (vehicle.isEmpty()) Text("SMC 1234 A", fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted.copy(alpha = .6f))
+                    if (vehicle.isEmpty()) Text("SMC 1234 A", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
                     BasicTextField(
                         vehicle, { vehicle = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' }.take(12) },
                         Modifier.fillMaxWidth().padding(end = 30.dp), singleLine = true,
-                        textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk),
+                        textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
                         cursorBrush = SolidColor(BookingsDeepGreen),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done)
                     )
@@ -280,11 +247,10 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                 }
             }
             Text("Singapore vehicle format (e.g. SMC 1234 A). Format can be configured later.",
-                Modifier.padding(top = 6.dp, start = 2.dp), fontFamily = DMSans, fontSize = 11.sp, lineHeight = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-            )
+                Modifier.padding(top = 6.dp, start = 2.dp), fontFamily = DMSans, fontSize = 11.sp, lineHeight = 15.sp, color = FacilityMuted)
 
-            CabLabel("Company Name")
-            CabDropdown(Icons.Outlined.DirectionsCar, company.label, CabCompany.entries.map { it.label }) { company = CabCompany.entries[it] }
+            InviteLabel("Company Name")
+            InviteDropdown(Icons.Outlined.DirectionsCar, company.label, CabCompany.entries.map { it.label }) { company = CabCompany.entries[it] }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 CabCompany.entries.filter { it.logo != null }.forEach { co ->
@@ -306,20 +272,20 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                             .toggleable(notifyOnEntry, role = Role.Switch) { notifyOnEntry = it }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Outlined.NotificationsActive, null, tint = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Outlined.NotificationsActive, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Notify me on entry", Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
+                        Text("Notify me on entry", Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk)
                         Switch(notifyOnEntry, onCheckedChange = null, colors = SwitchDefaults.colors(
-                            checkedTrackColor = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGreen, checkedThumbColor = Color.White, checkedBorderColor = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGreen,
+                            checkedTrackColor = FacilityGreen, checkedThumbColor = Color.White, checkedBorderColor = FacilityGreen,
                             uncheckedTrackColor = Color(0xFFDCE3E1), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color(0xFFDCE3E1)
                         ))
                     }
-                    CabLabel("Notes (Optional)")
-                    CabField(null) {
+                    InviteLabel("Notes (Optional)")
+                    InviteField(null) {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                            if (note.isEmpty()) Text("e.g. pick up at the lobby", fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted.copy(alpha = .6f))
+                            if (note.isEmpty()) Text("e.g. pick up at the lobby", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
                             BasicTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), singleLine = true,
-                                textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk),
+                                textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
                                 cursorBrush = SolidColor(BookingsDeepGreen),
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
                         }
@@ -332,78 +298,20 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
     }
 }
 
-private fun quickDayName(day: BookingDay) = when (day) {
-    BookingDay.Companion.today() -> "Today"
-    dayFromToday(1) -> "Tomorrow"
-    else -> null
-}
-
-@Composable
-private fun CabLabel(text: String) {
-    Text(text, Modifier.padding(top = 16.dp, bottom = 8.dp), fontFamily = DMSans, fontSize = 14.sp,
-        fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-    )
-}
-
-@Composable
-private fun CabError(text: String?) {
-    if (text != null) Text(text, Modifier.padding(start = 2.dp, top = 6.dp), fontFamily = DMSans, fontSize = 12.sp, color = CabErrorRed)
-}
-
-@Composable
-private fun CabField(
-    icon: ImageVector?, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, trailing: ImageVector? = null,
-    height: androidx.compose.ui.unit.Dp = 52.dp, content: @Composable () -> Unit,
-) {
-    Row(
-        modifier.fillMaxWidth().height(height).clip(CabFieldShape).background(Color.White)
-            .border(1.dp, CabFieldBorder, CabFieldShape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = BookingsDeepGreen, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-        }
-        Box(Modifier.weight(1f)) { content() }
-        if (trailing != null) Icon(trailing, null, tint = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, modifier = Modifier.size(22.dp))
-    }
-}
-
-@Composable
-private fun CabDropdown(icon: ImageVector, value: String, options: List<String>, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box(modifier) {
-        CabField(icon, onClick = { open = true }, trailing = Icons.Rounded.KeyboardArrowDown) {
-            Text(value, fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, maxLines = 1)
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = Color.White,
-            modifier = Modifier.heightIn(max = 320.dp)) {
-            options.forEachIndexed { i, option ->
-                DropdownMenuItem(
-                    text = { Text(option, fontFamily = DMSans, fontWeight = if (option == value) FontWeight.SemiBold else FontWeight.Normal) },
-                    onClick = { onSelect(i); open = false }
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun DirectionChip(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier.height(50.dp).clip(CabFieldShape)
             .background(if (selected) CabSelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGreen else CabFieldBorder, CabFieldShape)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else CabFieldBorder, CabFieldShape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(26.dp).clip(CircleShape).background(_root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGreen), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(26.dp).clip(CircleShape).background(FacilityGreen), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(10.dp))
-        Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
+        Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
     }
 }
 
@@ -412,13 +320,13 @@ private fun CompanyChip(company: CabCompany, selected: Boolean, modifier: Modifi
     Column(
         modifier.height(70.dp).clip(RoundedCornerShape(12.dp))
             .background(if (selected) CabSelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityGreen else CabFieldBorder, RoundedCornerShape(12.dp))
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else CabFieldBorder, RoundedCornerShape(12.dp))
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
         company.logo?.let { Image(painterResource(it), company.label, Modifier.height(26.dp)) }
         Spacer(Modifier.height(6.dp))
-        Text(company.label, fontFamily = DMSans, fontSize = 11.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, maxLines = 1)
+        Text(company.label, fontFamily = DMSans, fontSize = 11.sp, color = FacilityInk, maxLines = 1)
     }
 }
 
@@ -426,14 +334,8 @@ private fun CompanyChip(company: CabCompany, selected: Boolean, modifier: Modifi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectDateSheet(current: BookingDay, onDismiss: () -> Unit, onPick: (BookingDay) -> Unit) {
-    val today = remember { BookingDay.Companion.today() }
-    var shownMonth by remember { mutableStateOf(
-        BookingDay(
-            current.year,
-            current.month,
-            1
-        )
-    ) }
+    val today = remember { BookingDay.today() }
+    var shownMonth by remember { mutableStateOf(BookingDay(current.year, current.month, 1)) }
     // Start on the calendar only when a later date is already chosen.
     var showCalendar by remember { mutableStateOf(current != today && current != dayFromToday(1)) }
     ModalBottomSheet(
@@ -444,26 +346,17 @@ private fun SelectDateSheet(current: BookingDay, onDismiss: () -> Unit, onPick: 
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Select Date", Modifier.weight(1f), fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
+                Text("Select Date", Modifier.weight(1f), fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, "Close", tint = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
                 }
             }
             Spacer(Modifier.height(12.dp))
-            QuickDayChips(
-                current,
-                otherOpen = showCalendar,
-                onPick = onPick,
-                onOther = { showCalendar = true })
+            QuickDayChips(current, otherOpen = showCalendar, onPick = onPick, onOther = { showCalendar = true })
             AnimatedVisibility(showCalendar, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Box(Modifier.padding(top = 16.dp)) {
-                    MonthCalendar(
-                        month = shownMonth,
-                        today = today,
-                        selected = current,
-                        onMonthChange = { shownMonth = it },
-                        onSelect = onPick
-                    )
+                    MonthCalendar(month = shownMonth, today = today, selected = current,
+                        onMonthChange = { shownMonth = it }, onSelect = onPick)
                 }
             }
         }

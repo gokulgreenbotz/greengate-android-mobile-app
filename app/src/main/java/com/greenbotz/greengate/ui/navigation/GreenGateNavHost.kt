@@ -1,17 +1,14 @@
 package com.greenbotz.greengate.ui.navigation
 
-// Package stays com.greenbotz.greengate until the project-wide
-// "Package name does not match containing directory" fix moves it to ui.navigation.
-
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -28,42 +25,47 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.greenbotz.greengate.core.session.AppPreferences
-import com.greenbotz.greengate.core.session.AppTheme
-import com.greenbotz.greengate.ui.screens.facilities.BookingConfirmedScreen
-import com.greenbotz.greengate.ui.screens.facilities.BookingPaymentScreen
-import com.greenbotz.greengate.core.facility.BookingStore
-import com.greenbotz.greengate.ui.screens.home.BottomBarHeight
-import com.greenbotz.greengate.ui.screens.community.CommunityInfoScreen
-import com.greenbotz.greengate.ui.screens.assistant.GreenBotScreen
-import com.greenbotz.greengate.ui.screens.home.HomeScreen
-import com.greenbotz.greengate.ui.screens.home.MarinaBackground
-import com.greenbotz.greengate.ui.screens.facilities.MyBookingsScreen
-import com.greenbotz.greengate.ui.screens.profile.ProfileScreen
+import com.greenbotz.greengate.MainActivity
 import com.greenbotz.greengate.R
-import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.core.call.ReceiverCallController
 import com.greenbotz.greengate.core.call.provider.ReceiverCallState
+import com.greenbotz.greengate.core.facility.BookingStore
+import com.greenbotz.greengate.core.facility.transactionsOf
 import com.greenbotz.greengate.core.push.CallSignalingManager
 import com.greenbotz.greengate.core.push.CallSignalingService
-import com.greenbotz.greengate.core.facility.transactionsOf
-import com.greenbotz.greengate.ui.screens.intercom.CallTestHarnessScreen
-import com.greenbotz.greengate.ui.screens.intercom.InCallScreen
-import com.greenbotz.greengate.ui.screens.intercom.IncomingCallScreen
+import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.AppTheme
+import com.greenbotz.greengate.core.visitor.VisitorStore
+import com.greenbotz.greengate.ui.screens.assistant.GreenBotScreen
+import com.greenbotz.greengate.ui.screens.community.CommunityInfoScreen
 import com.greenbotz.greengate.ui.screens.facilities.BookFacilityScreen
+import com.greenbotz.greengate.ui.screens.facilities.BookingConfirmedScreen
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
 import com.greenbotz.greengate.ui.screens.facilities.BookingDetailScreen
+import com.greenbotz.greengate.ui.screens.facilities.BookingPaymentScreen
 import com.greenbotz.greengate.ui.screens.facilities.Facilities
 import com.greenbotz.greengate.ui.screens.facilities.Facility
 import com.greenbotz.greengate.ui.screens.facilities.FacilityAboutScreen
 import com.greenbotz.greengate.ui.screens.facilities.FacilityImages
+import com.greenbotz.greengate.ui.screens.facilities.MyBookingsScreen
+import com.greenbotz.greengate.ui.screens.home.BottomBarHeight
+import com.greenbotz.greengate.ui.screens.home.HomeScreen
+import com.greenbotz.greengate.ui.screens.home.MarinaBackground
+import com.greenbotz.greengate.ui.screens.intercom.CallTestHarnessScreen
+import com.greenbotz.greengate.ui.screens.intercom.InCallScreen
+import com.greenbotz.greengate.ui.screens.intercom.IncomingCallScreen
 import com.greenbotz.greengate.ui.screens.payments.PaymentsScreen
 import com.greenbotz.greengate.ui.screens.payments.TransactionDetailScreen
+import com.greenbotz.greengate.ui.screens.profile.ProfileScreen
 import com.greenbotz.greengate.ui.screens.visitors.InviteCreatedScreen
 import com.greenbotz.greengate.ui.screens.visitors.InviteDetailScreen
 import com.greenbotz.greengate.ui.screens.visitors.InviteType
 import com.greenbotz.greengate.ui.screens.visitors.VisitorManagementScreen
 import kotlinx.coroutines.delay
+
+// Package stays com.greenbotz.greengate until the project-wide
+// "Package name does not match containing directory" fix moves it to ui.navigation.
+
 
 @Composable
 fun MainScreen(
@@ -171,6 +173,7 @@ fun MainScreen(
                 }
                 screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
                 screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
+                screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
                 screen(Screen.Profile.route) { ProfileScreen(navController, onLogout) }
                 screen(Screen.BookFacility.route, underStatusBar = { true }) {
                     BookFacilityScreen(

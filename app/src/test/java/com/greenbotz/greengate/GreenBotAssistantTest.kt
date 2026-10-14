@@ -2,6 +2,7 @@ package com.greenbotz.greengate
 
 import com.greenbotz.greengate.core.assistant.GreenBotAction
 import com.greenbotz.greengate.core.assistant.replyToGreenBot
+import com.greenbotz.greengate.core.facility.Booking
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

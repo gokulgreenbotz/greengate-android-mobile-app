@@ -1,8 +1,5 @@
 package com.greenbotz.greengate.ui.navigation
 
-// Package stays com.greenbotz.greengate until the project-wide
-// "Package name does not match containing directory" fix moves it to ui.navigation.
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -13,7 +10,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.greenbotz.greengate.ui.theme.*
+import com.greenbotz.greengate.ui.theme.PrimaryGreen
+
+// Package stays com.greenbotz.greengate until the project-wide
+// "Package name does not match containing directory" fix moves it to ui.navigation.
+
 
 @Composable
 fun PlaceholderScreen(title: String, navController: NavController) {

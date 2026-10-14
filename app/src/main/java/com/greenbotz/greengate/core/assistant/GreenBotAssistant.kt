@@ -1,5 +1,7 @@
 package com.greenbotz.greengate.core.assistant
 
+import com.greenbotz.greengate.core.facility.Booking
+import com.greenbotz.greengate.ui.screens.facilities.Facility
 import java.util.Locale
 
 internal data class GreenBotReply(

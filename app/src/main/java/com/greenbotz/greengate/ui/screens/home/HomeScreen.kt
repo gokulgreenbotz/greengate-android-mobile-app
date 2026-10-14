@@ -45,12 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
-import com.greenbotz.greengate.R
 import com.greenbotz.greengate.ui.navigation.BottomNavigationBar
 import com.greenbotz.greengate.ui.navigation.Screen
+import com.greenbotz.greengate.ui.screens.facilities.Facility
 import com.greenbotz.greengate.ui.screens.sos.SosScreen
 import com.greenbotz.greengate.ui.screens.visitors.CreateInviteSheet
 import com.greenbotz.greengate.ui.theme.DMSans
@@ -62,12 +63,12 @@ private val MarinaInk: Color @Composable get() = MaterialTheme.colorScheme.onBac
 private val MarinaMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 private val MarinaGreen: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val MarinaCoral = Color(0xFFFF704F)
-val MarinaCream: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+internal val MarinaCream: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
 
 /** The supplied images are screenshot crops. Source rectangles exclude baked-in labels
  * and card edges; all text and interactive controls are rendered by Compose. */
 @Composable
-fun MarinaArt(
+internal fun MarinaArt(
     @DrawableRes resource: Int,
     modifier: Modifier = Modifier,
     crop: IntArray? = null,
@@ -102,14 +103,20 @@ fun HomeScreen(navController: NavController) {
         ThemeZeroHomeScreen(navController)
         return
     }
+    if (AppPreferences.theme == AppTheme.TWO) {
+        ThemeTwoHomeScreen(navController)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.THREE) {
+        ThemeThreeHomeScreen(navController)
+        return
+    }
     var showSos by remember { mutableStateOf(false) }
     var showInvite by remember { mutableStateOf(false) }
     if (showInvite) CreateInviteSheet(
         onDismiss = { showInvite = false },
         onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
-        onCreated = {
-            showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id))
-        }
+        onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
     ) { type ->
         showInvite = false
         navController.navigate(Screen.CreateInvite.create(type))
@@ -128,8 +135,7 @@ fun HomeScreen(navController: NavController) {
             Spacer(Modifier.height(9.dp))
             GreenBotCard { navController.navigate(Screen.GreenBot.route) }
             Spacer(Modifier.height(9.dp))
-            if (AppPreferences.theme == AppTheme.ONE) AnnouncementsBanner { navController.navigate(
-                Screen.Announcements.route) }
+            if (AppPreferences.theme == AppTheme.ONE) AnnouncementsBanner { navController.navigate(Screen.Announcements.route) }
             Spacer(Modifier.height(18.dp))
         }
     }
@@ -145,8 +151,7 @@ fun HomeScreen(navController: NavController) {
 @Composable
 private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
     Box(Modifier.fillMaxWidth()) {
-        MarinaArt(
-            R.drawable.marina_decor_top_left_leaves,
+        MarinaArt(R.drawable.marina_decor_top_left_leaves,
             Modifier.offset(x = (-16).dp, y = (-3).dp).size(110.dp, 65.dp).softArtEdges(),
             crop = intArrayOf(18, 40, 210, 110))
         Column {
@@ -155,8 +160,7 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                 HeaderButton(Icons.Outlined.Search, "Search") { navController.navigate(Screen.Search.route) }
                 Spacer(Modifier.width(9.dp))
                 Box {
-                    HeaderButton(Icons.Outlined.Notifications, "Notifications") { navController.navigate(
-                        Screen.Notifications.route) }
+                    HeaderButton(Icons.Outlined.Notifications, "Notifications") { navController.navigate(Screen.Notifications.route) }
                     Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(8.dp).background(MarinaCoral, CircleShape))
                 }
                 Spacer(Modifier.width(9.dp))
@@ -170,9 +174,10 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                 Spacer(Modifier.width(9.dp))
                 Surface(onClick = { navController.navigate(Screen.Profile.route) }, shape = CircleShape,
                     color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp, modifier = Modifier.size(48.dp)) {
-                    MarinaArt(
-                        R.drawable.marina_profile_avatar_reference, Modifier.fillMaxSize().padding(2.dp).clip(CircleShape),
-                        crop = intArrayOf(5, 10, 88, 88), description = "Alex's profile", scale = ContentScale.Crop)
+                    // The art has its own ring and status dot around a photo disc centred at (50, 51)
+                    // px; crop inside that disc so the button's circle is the only one.
+                    MarinaArt(R.drawable.marina_profile_avatar_reference, Modifier.fillMaxSize().padding(2.dp).clip(CircleShape),
+                        crop = intArrayOf(16, 17, 68, 68), description = "Alex's profile", scale = ContentScale.Crop)
                 }
             }
             Text("Good Morning, Alex", fontFamily = DMSans, fontSize = 24.sp,
@@ -185,13 +190,11 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                 }
             }
             Box(Modifier.fillMaxWidth().height(100.dp)) {
-                MarinaArt(
-                    R.drawable.marina_hero_residence_skyline,
+                MarinaArt(R.drawable.marina_hero_residence_skyline,
                     Modifier.align(Alignment.BottomEnd).offset(x = 16.dp).fillMaxWidth(.76f).height(92.dp).softArtEdges(),
                     crop = intArrayOf(20, 45, 560, 165), scale = ContentScale.Crop)
                 Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp)) {
-                    LocationPill("Tower A · Unit 12-03", Icons.Rounded.Apartment) { navController.navigate(
-                        Screen.LocationPicker.route) }
+                    LocationPill("Tower A · Unit 12-03", Icons.Rounded.Apartment) { navController.navigate(Screen.LocationPicker.route) }
                 }
                 Column(Modifier.align(Alignment.BottomStart).padding(bottom = 15.dp)) {
                     Box(Modifier.padding(bottom = 10.dp).size(34.dp, 2.dp).background(MarinaCoral, CircleShape))
@@ -236,8 +239,7 @@ private fun MarinaCard(modifier: Modifier = Modifier, color: Color = MarinaCream
 private fun CommunityAnnouncementCard(onClick: () -> Unit) {
     MarinaCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            MarinaArt(
-                R.drawable.marina_icon_community_announcement, Modifier.size(65.dp, 53.dp).softArtEdges(),
+            MarinaArt(R.drawable.marina_icon_community_announcement, Modifier.size(65.dp, 53.dp).softArtEdges(),
                 crop = intArrayOf(28, 18, 118, 100))
             Spacer(Modifier.width(7.dp))
             Column(Modifier.weight(1f)) {
@@ -298,27 +300,23 @@ private fun ActionGrid(navController: NavController, onInvite: () -> Unit) {
     // Feedback appears only once it's switched on in Profile; the rotation follows what's shown.
     val icons = if (AppPreferences.showFeedback) allIcons else allIcons.filter { it.route != Screen.Feedback.route }
     val sequence = rememberActionIconSequence(iconSet, icons.map { icon ->
-        if ((iconSet == IconSet.ZERO || iconSet == IconSet.CLAY || iconSet == IconSet.ONE) && icon.layeredArt == 3) 2100 else icon.durationMillis
+        if ((iconSet == IconSet.ZERO || iconSet == IconSet.CLAY) && icon.layeredArt == 3) 2100 else icon.durationMillis
     })
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         icons.withIndex().chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 row.forEach { (index, spec) ->
-                    ActionCard(if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.InviteVisitors.route) "Invite Visitors" else if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.Community.route) "My Community" else spec.title, spec.subtitle, Modifier.weight(1f), spec.color,
+                    ActionCard(if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.InviteVisitors.route) "Pre-Invites" else if (AppPreferences.theme == AppTheme.ZERO && spec.route == Screen.Community.route) "My Community" else spec.title, spec.subtitle, Modifier.weight(1f), spec.color,
                         onClick = { if (spec.route == Screen.InviteVisitors.route) onInvite() else navController.navigate(spec.route) }) {
                         val active = index == sequence.activeIndex
                         val progress = if (active) sequence.progress.value else 0f
                         val art = spec.layeredArt
                         when {
                             iconSet == IconSet.THREE -> spec.icon(active)
-                            art == null && (iconSet == IconSet.ZERO || iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(
-                                progress,
-                                active,
-                                iconSet = iconSet
-                            )
+                            art == null && (iconSet == IconSet.ZERO || iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(progress, active, iconSet = iconSet)
                             art == null -> CommunityIcon(progress, active)
                             iconSet == IconSet.TWO -> LayeredActionIcon(art, progress, active)
-                            else -> LayeredIconSetOne(art, progress, active, iconSet = iconSet)
+                            else -> LayeredIconSetZero(art, progress, active, iconSet = iconSet)
                         }
                     }
                 }
@@ -413,13 +411,11 @@ private fun DummyActionIcon(icon: ImageVector, tint: Color, isActive: Boolean) {
 @Composable
 private fun BookFacilityIcon(isActive: Boolean) {
     IconStage(127.5.dp) {
-        MarinaArt(
-            R.drawable.marina_icon_book_facility, Modifier.fillMaxSize().softArtEdges(),
+        MarinaArt(R.drawable.marina_icon_book_facility, Modifier.fillMaxSize().softArtEdges(),
             intArrayOf(0, 0, 270, 180))
         val bounce = if (isActive) { val b by rememberVerticalBounce(); b } else 0f
         Box(Modifier.offset(x = 45.dp, y = 47.dp).size(35.dp, 35.dp).clip(CircleShape).background(Color(0xFFF5F7F1)))
-        MarinaArt(
-            R.drawable.marina_icon_book_facility,
+        MarinaArt(R.drawable.marina_icon_book_facility,
             Modifier.offset(x = 45.dp, y = 47.dp).size(35.dp, 35.dp).clip(CircleShape)
                 .graphicsLayer { translationY = bounce.dp.toPx() },
             intArrayOf(96, 99, 74, 73))
@@ -429,13 +425,11 @@ private fun BookFacilityIcon(isActive: Boolean) {
 @Composable
 private fun InviteVisitorsIcon(isActive: Boolean) {
     IconStage(115.9.dp) {
-        MarinaArt(
-            R.drawable.marina_icon_invite_visitors, Modifier.fillMaxSize().softArtEdges(),
+        MarinaArt(R.drawable.marina_icon_invite_visitors, Modifier.fillMaxSize().softArtEdges(),
             intArrayOf(0, 14, 240, 176))
         val pop = if (isActive) { val p by rememberPopScale(); p } else 1f
         Box(Modifier.offset(x = 16.9.dp, y = 32.8.dp).size(33.3.dp, 37.7.dp).clip(CircleShape).background(Color(0xFFE7DECF)))
-        MarinaArt(
-            R.drawable.marina_icon_invite_visitors,
+        MarinaArt(R.drawable.marina_icon_invite_visitors,
             Modifier.offset(x = 16.9.dp, y = 32.8.dp).size(33.3.dp, 37.7.dp).clip(CircleShape)
                 .graphicsLayer {
                     scaleX = pop; scaleY = pop
@@ -448,13 +442,11 @@ private fun InviteVisitorsIcon(isActive: Boolean) {
 @Composable
 private fun EFormsIcon(isActive: Boolean) {
     IconStage(138.9.dp) {
-        MarinaArt(
-            R.drawable.marina_icon_eforms, Modifier.fillMaxSize().softArtEdges(),
+        MarinaArt(R.drawable.marina_icon_eforms, Modifier.fillMaxSize().softArtEdges(),
             intArrayOf(0, 22, 250, 153))
         val glide = if (isActive) { val g by rememberHorizontalGlide(); g } else 0f
         Box(Modifier.offset(x = 93.3.dp, y = 33.9.dp).size(18.9.dp, 11.7.dp).clip(CircleShape).background(Color(0xFFFAF7F0)))
-        MarinaArt(
-            R.drawable.marina_icon_eforms,
+        MarinaArt(R.drawable.marina_icon_eforms,
             Modifier.offset(x = 93.3.dp, y = 33.9.dp).size(18.9.dp, 11.7.dp).clip(CircleShape)
                 .graphicsLayer { translationX = glide.dp.toPx() },
             intArrayOf(168, 83, 34, 21))
@@ -467,16 +459,14 @@ private val FeedbackDotCrops = listOf(intArrayOf(58, 83, 22, 22), intArrayOf(86,
 @Composable
 private fun FeedbackIcon(isActive: Boolean) {
     IconStage(148.2.dp) {
-        MarinaArt(
-            R.drawable.marina_icon_feedback, Modifier.fillMaxSize().softArtEdges(),
+        MarinaArt(R.drawable.marina_icon_feedback, Modifier.fillMaxSize().softArtEdges(),
             intArrayOf(0, 23, 265, 152))
         FeedbackDotXs.forEach { x ->
             Box(Modifier.offset(x = x.dp, y = 33.6.dp).size(12.3.dp, 12.3.dp).clip(CircleShape).background(Color(0xFFA3B99C)))
         }
         FeedbackDotXs.forEachIndexed { i, x ->
             val bounce = if (isActive) { val b by rememberTypingBounce(i * 160); b } else 0f
-            MarinaArt(
-                R.drawable.marina_icon_feedback,
+            MarinaArt(R.drawable.marina_icon_feedback,
                 Modifier.offset(x = x.dp, y = 33.6.dp).size(12.3.dp, 12.3.dp).clip(CircleShape)
                     .graphicsLayer { translationY = bounce.dp.toPx() },
                 FeedbackDotCrops[i])
@@ -519,8 +509,7 @@ private fun ArrowBubble() {
 private fun AnnouncementsBanner(onClick: () -> Unit) {
     MarinaCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            MarinaArt(
-                R.drawable.marina_icon_announcements, Modifier.size(86.dp, 52.dp).softArtEdges(),
+            MarinaArt(R.drawable.marina_icon_announcements, Modifier.size(86.dp, 52.dp).softArtEdges(),
                 crop = intArrayOf(0, 26, 185, 102))
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
@@ -576,9 +565,8 @@ private fun GlanceItem(count: String, label: String, @DrawableRes art: Int, crop
 
 internal val BottomBarHeight = 78.dp
 
-
 @Composable
-fun NavItem(icon: ImageVector, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun NavItem(icon: ImageVector, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.selectable(selected, role = Role.Tab, onClick = onClick).padding(top = 6.dp, bottom = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, Modifier.size(25.dp), tint = if (selected) MarinaGreen else MarinaMuted)

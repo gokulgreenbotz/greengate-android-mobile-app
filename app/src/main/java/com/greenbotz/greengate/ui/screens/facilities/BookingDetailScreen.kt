@@ -283,8 +283,8 @@ private fun PaymentCard(booking: Booking, onReceipt: (String) -> Unit) {
 @Composable
 private fun AmountRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
-        Text(value, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted)
+        Text(value, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
     }
 }
 
@@ -365,14 +365,14 @@ private fun DepositCard(booking: Booking, now: Long) {
 private fun TimelineStep(label: String, at: Long, done: Boolean) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(20.dp).clip(CircleShape).background(if (done) BookingsDeepGreen else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted.copy(alpha = .25f)),
+            Modifier.size(20.dp).clip(CircleShape).background(if (done) BookingsDeepGreen else FacilityMuted.copy(alpha = .25f)),
             contentAlignment = Alignment.Center
         ) {
             if (done) Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = if (done) _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk else _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = if (done) FacilityInk else FacilityMuted)
         Text(if (done) shortDateTimeLabel(at) else "Pending", fontFamily = DMSans, fontSize = 13.sp,
-            color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted, textAlign = TextAlign.End)
+            color = FacilityMuted, textAlign = TextAlign.End)
     }
 }

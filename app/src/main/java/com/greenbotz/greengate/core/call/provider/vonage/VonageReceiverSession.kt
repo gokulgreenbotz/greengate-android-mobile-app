@@ -1,13 +1,13 @@
 package com.greenbotz.greengate.core.call.provider.vonage
 
 import android.content.Context
+import android.opengl.GLSurfaceView
 import android.util.Log
 import android.view.View
 import com.greenbotz.greengate.core.call.provider.EndReason
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
 import com.greenbotz.greengate.core.call.provider.ReceiverCallSession
 import com.greenbotz.greengate.core.call.provider.ReceiverCallState
-import android.opengl.GLSurfaceView
 import com.opentok.android.BaseVideoRenderer
 import com.opentok.android.OpentokError
 import com.opentok.android.Publisher

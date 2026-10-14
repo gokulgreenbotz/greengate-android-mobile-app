@@ -48,10 +48,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
+import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.IconSet
-import com.greenbotz.greengate.R
 import com.greenbotz.greengate.ui.navigation.Screen
+import com.greenbotz.greengate.ui.screens.facilities.Facility
 import com.greenbotz.greengate.ui.screens.sos.SosScreen
 import com.greenbotz.greengate.ui.screens.visitors.CreateInviteSheet
 import com.greenbotz.greengate.ui.theme.DMSans
@@ -85,9 +86,7 @@ internal fun ThemeZeroHomeScreen(navController: NavController) {
     if (showInvite) CreateInviteSheet(
         onDismiss = { showInvite = false },
         onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
-        onCreated = {
-            showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id))
-        }
+        onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
     ) { type ->
         showInvite = false
         navController.navigate(Screen.CreateInvite.create(type))
@@ -135,8 +134,7 @@ private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () 
             }
             ReferenceHeaderButton(Icons.Outlined.Search, "Search", s) { nav.navigate(Screen.Search.route) }
             Box {
-                ReferenceHeaderButton(Icons.Rounded.Notifications, "Notifications", s) { nav.navigate(
-                    Screen.Notifications.route) }
+                ReferenceHeaderButton(Icons.Rounded.Notifications, "Notifications", s) { nav.navigate(Screen.Notifications.route) }
                 Box(Modifier.align(Alignment.TopEnd).padding(top = 6.u(s), end = 8.u(s)).size(8.u(s)).background(Color(0xFFFF603D), CircleShape))
             }
             Box(Modifier.padding(horizontal = 3.u(s)).size(38.u(s)).clip(CircleShape)
@@ -147,8 +145,7 @@ private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () 
                     Box(contentAlignment = Alignment.Center) { Text("SOS", color = Color.White, fontFamily = DMSans, fontSize = 11.t(s)) }
                 }
             }
-            ReferenceHeaderButton(Icons.Rounded.Person, "Profile", s, profile = true) { nav.navigate(
-                Screen.Profile.route) }
+            ReferenceHeaderButton(Icons.Rounded.Person, "Profile", s, profile = true) { nav.navigate(Screen.Profile.route) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -178,8 +175,7 @@ private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () 
                 Icon(Icons.Outlined.Info, "About Marina Bay Residences", Modifier.size(16.u(s)), tint = Color.White)
             }
             Spacer(Modifier.weight(1f))
-            ReferenceChip("Tower A · Unit 12-03", Icons.Rounded.Apartment, 168f, s) { nav.navigate(
-                Screen.LocationPicker.route) }
+            ReferenceChip("Tower A · Unit 12-03", Icons.Rounded.Apartment, 168f, s) { nav.navigate(Screen.LocationPicker.route) }
         }
     }
 }
@@ -255,24 +251,25 @@ private fun ReferenceAnnouncement(s: Float, onClick: () -> Unit) {
     }
     ReferenceGlass(Modifier.fillMaxWidth().height(AnnouncementCardHeight.u(s)), s, onClick, blurBackdrop = true) {
         ReferenceArt(intArrayOf(55, 780, 148, 116), Modifier.align(Alignment.CenterStart).padding(start = 12.u(s)).size(72.u(s), 59.u(s)), feather = true)
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 96.u(s), end = 82.u(s))) {
-            // A small label over the message, which is what residents need to read.
-            Text("Priority Announcements", color = GateGreen, fontFamily = DMSans, fontSize = 11.t(s), lineHeight = 14.t(s),
+        Column(Modifier.fillMaxHeight().padding(start = 96.u(s), end = 82.u(s), top = 14.u(s), bottom = 10.u(s))) {
+            // The label sits at the top of the card; the message and dots centre in the space below it.
+            Text("Priority Announcements", color = GateGreen, fontFamily = DMSans, fontSize = 13.t(s), lineHeight = 16.t(s),
                 fontWeight = FontWeight.Medium, letterSpacing = .4f.t(s))
-            Spacer(Modifier.height(3.u(s)))
-            AnimatedContent(current, transitionSpec = {
-                (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
-            }, label = "priorityAnnouncement") { index ->
-                Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
-                    fontWeight = FontWeight.Medium, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.height(6.u(s)))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.u(s)), verticalAlignment = Alignment.CenterVertically) {
-                PriorityAnnouncements.indices.forEach { index ->
-                    val active = index == current
-                    val width by animateDpAsState(if (active) 14.u(s) else 5.u(s), label = "dotWidth")
-                    val color by animateColorAsState(if (active) GateGreen else GateGreen.copy(alpha = .25f), label = "dotColor")
-                    Box(Modifier.size(width, 5.u(s)).background(color, CircleShape))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                AnimatedContent(current, transitionSpec = {
+                    (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
+                }, label = "priorityAnnouncement") { index ->
+                    Text(PriorityAnnouncements[index], color = GateInk, fontFamily = DMSans, fontSize = 14.t(s), lineHeight = 18.t(s),
+                        fontWeight = FontWeight.Medium, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(6.u(s)))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.u(s)), verticalAlignment = Alignment.CenterVertically) {
+                    PriorityAnnouncements.indices.forEach { index ->
+                        val active = index == current
+                        val width by animateDpAsState(if (active) 14.u(s) else 5.u(s), label = "dotWidth")
+                        val color by animateColorAsState(if (active) GateGreen else GateGreen.copy(alpha = .25f), label = "dotColor")
+                        Box(Modifier.size(width, 5.u(s)).background(color, CircleShape))
+                    }
                 }
             }
         }
@@ -287,7 +284,7 @@ private fun ReferenceAnnouncement(s: Float, onClick: () -> Unit) {
 private data class ReferenceFeature(val title: String, val subtitle: String, val route: String, val art: IntArray)
 private val ReferenceActions = listOf(
     ReferenceFeature("Book Facility", "Reserve amenities\nwith ease", Screen.BookFacility.route, intArrayOf(105, 940, 185, 138)),
-    ReferenceFeature("Invite Visitors", "Create visitor\npasses quickly", Screen.InviteVisitors.route, intArrayOf(538, 940, 163, 139)),
+    ReferenceFeature("Pre-Invites", "Create visitor\npasses quickly", Screen.InviteVisitors.route, intArrayOf(538, 940, 163, 139)),
     ReferenceFeature("E-Forms", "Submit and manage\ndigital forms", Screen.EForms.route, intArrayOf(136, 1207, 168, 141)),
     ReferenceFeature("My Community", "Connect, share\nand stay updated", Screen.Community.route, intArrayOf(510, 1207, 178, 143))
 )
@@ -295,9 +292,7 @@ private val ReferenceActions = listOf(
 @Composable
 private fun ReferenceFeatures(nav: NavController, s: Float, onInvite: () -> Unit) {
     val actions = if (AppPreferences.showFeedback) ReferenceActions + ReferenceFeature("Feedback", "Share ideas and\nhelp us improve", Screen.Feedback.route, intArrayOf(510, 1207, 178, 143)) else ReferenceActions
-    val sequence = if (AppPreferences.useReferenceArtwork) null else rememberActionIconSequence(
-        AppPreferences.iconSet,
-        actions.map { 1800 })
+    val sequence = if (AppPreferences.useReferenceArtwork) null else rememberActionIconSequence(AppPreferences.iconSet, actions.map { 1800 })
     Column(verticalArrangement = Arrangement.spacedBy(7.u(s))) {
         actions.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.u(s))) {
@@ -318,30 +313,10 @@ private fun ReferenceFeatures(nav: NavController, s: Float, onInvite: () -> Unit
                                         Screen.Feedback.route -> Icons.Rounded.Feedback
                                         else -> Icons.Rounded.Groups
                                     }, null, modifier.padding(16.u(s)), tint = GateGreen)
-                                feature.route == Screen.Community.route && (AppPreferences.iconSet == IconSet.ZERO || AppPreferences.iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(
-                                    progress,
-                                    active,
-                                    modifier,
-                                    AppPreferences.iconSet
-                                )
-                                feature.route == Screen.Community.route -> CommunityIcon(
-                                    progress,
-                                    active,
-                                    modifier
-                                )
-                                AppPreferences.iconSet == IconSet.TWO -> LayeredActionIcon(
-                                    if (feature.route == Screen.Feedback.route) 3 else index,
-                                    progress,
-                                    active,
-                                    modifier
-                                )
-                                else -> LayeredIconSetOne(
-                                    if (feature.route == Screen.Feedback.route) 3 else index,
-                                    progress,
-                                    active,
-                                    modifier,
-                                    AppPreferences.iconSet
-                                )
+                                feature.route == Screen.Community.route && (AppPreferences.iconSet == IconSet.ZERO || AppPreferences.iconSet == IconSet.CLAY) -> CommunitySetZeroIcon(progress, active, modifier, AppPreferences.iconSet)
+                                feature.route == Screen.Community.route -> CommunityIcon(progress, active, modifier)
+                                AppPreferences.iconSet == IconSet.TWO -> LayeredActionIcon(if (feature.route == Screen.Feedback.route) 3 else index, progress, active, modifier)
+                                else -> LayeredIconSetZero(if (feature.route == Screen.Feedback.route) 3 else index, progress, active, modifier, AppPreferences.iconSet)
                             }
                         } else {
                         if (feature.route == Screen.Feedback.route) Icon(Icons.Rounded.Feedback, null, Modifier.align(Alignment.TopCenter).padding(top = 22.u(s)).size(76.u(s)), tint = GateGreen)
@@ -370,14 +345,11 @@ private fun ReferenceGlance(nav: NavController, s: Float) {
         Icon(Icons.Rounded.ChevronRight, "View bookings", Modifier.align(Alignment.TopEnd).padding(end = 10.u(s), top = 8.u(s)).size(23.u(s))
             .clickable(role = Role.Button) { nav.navigate(Screen.Bookings.route) }, tint = GateInk)
         Row(Modifier.offset(10.u(s), 35.u(s)).fillMaxWidth().padding(end = 20.u(s)), verticalAlignment = Alignment.CenterVertically) {
-            ReferenceStat("2", "Bookings\nConfirmed", intArrayOf(162, 1531, 70, 77), s, Modifier.weight(1f)) { nav.navigate(
-                Screen.Bookings.route) }
+            ReferenceStat("2", "Bookings\nConfirmed", intArrayOf(162, 1531, 70, 77), s, Modifier.weight(1f)) { nav.navigate(Screen.Bookings.route) }
             Box(Modifier.width(.5f.u(s)).height(36.u(s)).background(GateGreen.copy(alpha = .2f)))
-            ReferenceStat("1", "Visitor\nExpected", intArrayOf(380, 1530, 72, 78), s, Modifier.weight(1f)) { nav.navigate(
-                Screen.Visitors.route) }
+            ReferenceStat("1", "Visitor\nExpected", intArrayOf(380, 1530, 72, 78), s, Modifier.weight(1f)) { nav.navigate(Screen.Visitors.route) }
             Box(Modifier.width(.5f.u(s)).height(36.u(s)).background(GateGreen.copy(alpha = .2f)))
-            ReferenceStat("3", "New\nAnnouncements", intArrayOf(579, 1530, 76, 78), s, Modifier.weight(1.15f)) { nav.navigate(
-                Screen.Announcements.route) }
+            ReferenceStat("3", "New\nAnnouncements", intArrayOf(579, 1530, 76, 78), s, Modifier.weight(1.15f)) { nav.navigate(Screen.Announcements.route) }
         }
     }
 }
@@ -424,15 +396,11 @@ internal fun ThemeZeroBottomNavigation(nav: NavController, route: String?) {
         Box(Modifier.fillMaxWidth().height(78.u(s))) {
             ReferenceGlass(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(70.u(s)), s, radius = 35f) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 6.u(s)), verticalAlignment = Alignment.CenterVertically) {
-                    ReferenceNavItem(Icons.Rounded.Home, "Home", route == Screen.Home.route, s, Modifier.weight(1f)) { navigate(
-                        Screen.Home.route) }
-                    ReferenceNavItem(Icons.Outlined.Groups, "Community", route == Screen.Community.route, s, Modifier.weight(1f)) { navigate(
-                        Screen.Community.route) }
+                    ReferenceNavItem(Icons.Rounded.Home, "Home", route == Screen.Home.route, s, Modifier.weight(1f)) { navigate(Screen.Home.route) }
+                    ReferenceNavItem(Icons.Outlined.Groups, "Community", route == Screen.Community.route, s, Modifier.weight(1f)) { navigate(Screen.Community.route) }
                     Spacer(Modifier.weight(1f))
-                    ReferenceNavItem(Icons.Outlined.Lock, "Access", route == Screen.Access.route, s, Modifier.weight(1f)) { navigate(
-                        Screen.Access.route) }
-                    ReferenceNavItem(Icons.Outlined.GridView, "More", route == Screen.Profile.route, s, Modifier.weight(1f)) { navigate(
-                        Screen.Profile.route) }
+                    ReferenceNavItem(Icons.Outlined.Lock, "Access", route == Screen.Access.route, s, Modifier.weight(1f)) { navigate(Screen.Access.route) }
+                    ReferenceNavItem(Icons.Outlined.GridView, "More", route == Screen.Profile.route, s, Modifier.weight(1f)) { navigate(Screen.Profile.route) }
                 }
             }
             Surface(onClick = { navigate(Screen.Home.route) }, Modifier.align(Alignment.TopCenter).size(67.u(s)), shape = CircleShape,
@@ -455,7 +423,7 @@ private fun ReferenceNavItem(icon: ImageVector, title: String, selected: Boolean
 }
 
 @Composable
-private fun ReferenceArt(crop: IntArray, modifier: Modifier, feather: Boolean = false) {
+internal fun ReferenceArt(crop: IntArray, modifier: Modifier, feather: Boolean = false) {
     val bitmap = ImageBitmap.imageResource(R.drawable.gg_home_reference_art)
     val painter = remember(bitmap, crop.toList()) { BitmapPainter(bitmap, IntOffset(crop[0], crop[1]), IntSize(crop[2], crop[3])) }
     val edges = if (feather) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {

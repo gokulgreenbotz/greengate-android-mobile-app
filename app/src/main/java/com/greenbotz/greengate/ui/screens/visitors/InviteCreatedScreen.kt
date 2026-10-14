@@ -37,14 +37,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.greenbotz.greengate.ui.theme.DMSans
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -52,11 +50,13 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
+import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
 import com.greenbotz.greengate.ui.screens.facilities.GlassCard
 import com.greenbotz.greengate.ui.screens.facilities.GlassTopBar
 import com.greenbotz.greengate.ui.screens.facilities.QrPass
+import com.greenbotz.greengate.ui.screens.facilities.greenButton
+import com.greenbotz.greengate.ui.theme.DMSans
 import java.io.File
 import kotlin.math.cos
 import kotlin.math.sin
@@ -75,15 +75,12 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
     val pop = remember(invite.id) { Animatable(0f) }
     LaunchedEffect(invite.id) { pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) }
     val done = {
-        navController.navigate(Screen.Visitors.route) { popUpTo(
-            Screen.Home.route) }
+        navController.navigate(Screen.Visitors.route) { popUpTo(Screen.Home.route) }
     }
 
     Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
-            GlassTopBar(
-                "",
-                onBack = { navController.popBackStack() })
+            GlassTopBar("", onBack = { navController.popBackStack() })
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -101,42 +98,34 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
                     }
                     Box(
                         Modifier.size(78.dp).scale(pop.value).shadow(10.dp, CircleShape).clip(CircleShape)
-                            .background(Brush.verticalGradient(listOf(Color(0xFF2AA07D),
-                                BookingsDeepGreen
-                            ))),
+                            .background(greenButton(Color(0xFF2AA07D))),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(44.dp)) }
                 }
-                Text("Invite Created!", fontFamily = DMSans, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
-                Text("Share the invite with your visitor", fontFamily = DMSans, fontSize = 15.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
+                Text("Invite Created!", fontFamily = DMSans, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+                Text("Share the invite with your visitor", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted)
                 Spacer(Modifier.height(16.dp))
                 QrPass(invite.qrContent(), invite.id)
                 Spacer(Modifier.height(8.dp))
-                Text("ID: ${invite.id}", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk)
-                Text("${invite.name} · ${invite.whenLabel()}", fontFamily = DMSans, fontSize = 13.sp, color = _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityMuted)
+                Text("ID: ${invite.id}", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+                Text("${invite.name} · ${invite.whenLabel()}", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
                 Spacer(Modifier.height(16.dp))
                 ShareRow(Icons.Outlined.Share, "Share via WhatsApp", Color(0xFF25D366)) { shareToWhatsApp(context, invite) }
                 Spacer(Modifier.height(10.dp))
-                ShareRow(Icons.Outlined.Link, "Copy Link",
-                    _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-                ) {
+                ShareRow(Icons.Outlined.Link, "Copy Link", FacilityInk) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Invite link", inviteLink(invite)))
                     Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
                 }
                 Spacer(Modifier.height(10.dp))
-                ShareRow(Icons.Outlined.Download, "Download Pass",
-                    _root_ide_package_.com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-                ) { savePass(context, invite) }
+                ShareRow(Icons.Outlined.Download, "Download Pass", FacilityInk) { savePass(context, invite) }
                 Spacer(Modifier.height(16.dp))
             }
             Box(
                 Modifier.padding(16.dp).fillMaxWidth().height(56.dp)
                     .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1D8A6A),
-                        BookingsDeepGreen
-                    )))
+                    .background(greenButton(Color(0xFF1D8A6A)))
                     .clickableButton { done() },
                 contentAlignment = Alignment.Center
             ) { Text("Done", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
@@ -149,20 +138,11 @@ private fun Modifier.clickableButton(onClick: () -> Unit) =
 
 @Composable
 private fun ShareRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color, onClick: () -> Unit) {
-    GlassCard(
-        Modifier.clickableButton(onClick),
-        padding = 14.dp
-    ) {
+    GlassCard(Modifier.clickableButton(onClick), padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(16.dp))
-            Text(
-                label,
-                fontFamily = DMSans,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = FacilityInk
-            )
+            Text(label, fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
         }
     }
 }

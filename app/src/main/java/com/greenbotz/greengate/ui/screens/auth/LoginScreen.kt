@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,16 +30,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -68,27 +65,43 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.ResidentApiException
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.theme.DMSans
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private val WhiteGlass = Color.White.copy(alpha = .25f)
 private val GlassBorder = Color.White.copy(alpha = .58f)
 
+// Built-in demo account: signs in without the server and shows the app's sample data.
+private const val DemoMobile = "000000"
+private const val DemoPassword = "123456"
+
+/** +country-code form the API expects. Numbers typed without a country code are Singapore numbers. */
+private fun internationalNumber(input: String): String? {
+    val digits = input.filter(Char::isDigit)
+    if (digits.length < 8) return null
+    return if (input.startsWith("+") || digits.length > 8) "+$digits" else "+65$digits"
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onSignedIn: () -> Unit) {
+fun LoginScreen() {
     var mobile by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var enteringPassword by rememberSaveable { mutableStateOf(false) }
+    // Step 2 input: the SMS code, or the demo password.
+    var code by rememberSaveable { mutableStateOf("") }
+    // Number the code was sent to (+country code), or DemoMobile.
+    var phone by rememberSaveable { mutableStateOf("") }
+    var enteringCode by rememberSaveable { mutableStateOf(false) }
+    var resendIn by rememberSaveable { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -107,32 +120,83 @@ fun LoginScreen(onSignedIn: () -> Unit) {
         }
     }
 
+    LaunchedEffect(resendIn) {
+        if (resendIn > 0) {
+            delay(1_000)
+            resendIn -= 1
+        }
+    }
+
+    // Step 1: the demo number goes straight to its password; any other number is texted a code.
+    suspend fun requestCode(input: String) {
+        if (input == DemoMobile) {
+            phone = DemoMobile
+            code = ""
+            enteringCode = true
+            message = null
+            keyboardController?.hide()
+            focusManager.clearFocus()
+            return
+        }
+        val number = internationalNumber(input) ?: run {
+            message = "Enter your mobile number."
+            return
+        }
+        busy = true
+        try {
+            resendIn = ResidentSession.sendCode(number)
+            phone = number
+            code = ""
+            enteringCode = true
+            message = "If this number is registered, a verification code has been sent."
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        } catch (e: ResidentApiException) {
+            message = e.message
+        } finally {
+            busy = false
+        }
+    }
+
+    // Step 2: a successful sign-in changes ResidentSession.state, which swaps this screen for the app.
+    suspend fun signIn() {
+        if (phone == DemoMobile) {
+            if (code == DemoPassword) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+                ResidentSession.startDemo()
+            } else {
+                message = "For this demo, use password $DemoPassword."
+            }
+            return
+        }
+        if (code.length < 4) {
+            message = "Enter the code we sent you."
+            return
+        }
+        busy = true
+        try {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+            ResidentSession.verifyCode(phone, code)
+        } catch (e: ResidentApiException) {
+            message = e.message
+        } finally {
+            busy = false
+        }
+    }
+
     fun continueLogin() {
-        if (animatingClick) return
+        if (animatingClick || busy) return
         animatingClick = true
         animationScope.launch {
             try {
                 clickProgress.animateTo(1f, tween(100, easing = FastOutSlowInEasing))
                 clickProgress.animateTo(0f, tween(180, easing = FastOutSlowInEasing))
-                if (!enteringPassword) {
-                    if (mobile.trim() == "000000") {
-                        enteringPassword = true
-                        message = null
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                    } else {
-                        message = "For this demo, use mobile number 000000."
-                    }
-                } else if (password == "123456") {
-                    keyboardController?.hide()
-                    focusManager.clearFocus()
-                    onSignedIn()
-                } else {
-                    message = "For this demo, use password 123456."
-                }
             } finally {
                 animatingClick = false
             }
+            if (enteringCode) signIn() else requestCode(mobile.trim())
         }
     }
 
@@ -252,33 +316,55 @@ fun LoginScreen(onSignedIn: () -> Unit) {
                         .padding(bottom = if (shortScreen) 23.dp else 42.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (enteringPassword) {
-                        Text(
-                            "000000  ·  Change number",
-                            modifier = Modifier
-                                .align(Alignment.Start)
-                                .clickable {
-                                    enteringPassword = false
-                                    password = ""
+                    if (enteringCode) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "$phone  ·  Change number",
+                                modifier = Modifier.clickable {
+                                    enteringCode = false
+                                    code = ""
+                                    resendIn = 0
                                     message = null
-                                }
-                                .padding(bottom = 8.dp),
-                            fontFamily = DMSans,
-                            fontSize = 13.sp,
-                            color = Color.White
-                        )
+                                },
+                                fontFamily = DMSans,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                            if (phone != DemoMobile) {
+                                Spacer(Modifier.weight(1f))
+                                Text(
+                                    if (resendIn > 0) "Resend in ${resendIn}s" else "Resend code",
+                                    modifier = Modifier.clickable(enabled = resendIn == 0 && !busy) {
+                                        animationScope.launch { requestCode(phone) }
+                                    },
+                                    fontFamily = DMSans,
+                                    fontSize = 13.sp,
+                                    color = Color.White.copy(alpha = if (resendIn > 0) .6f else 1f)
+                                )
+                            }
+                        }
                     }
                     GlassLoginField(
-                        value = if (enteringPassword) password else mobile,
-                        onValueChange = {
-                            if (enteringPassword) password = it else mobile = it.filter(Char::isDigit).take(15)
+                        value = if (enteringCode) code else mobile,
+                        onValueChange = { input ->
+                            if (enteringCode) {
+                                code = input.filter(Char::isDigit).take(10)
+                            } else {
+                                val digits = input.filter(Char::isDigit).take(15)
+                                mobile = if (input.trimStart().startsWith("+")) "+$digits" else digits
+                            }
                             message = null
                         },
-                        placeholder = if (enteringPassword) "Password" else "Mobile Number",
+                        placeholder = when {
+                            !enteringCode -> "Mobile Number"
+                            phone == DemoMobile -> "Password"
+                            else -> "Verification Code"
+                        },
                         leadingIcon = R.drawable.ic_phone_outline,
-                        password = enteringPassword,
-                        passwordVisible = passwordVisible,
-                        onTogglePassword = { passwordVisible = !passwordVisible },
+                        code = enteringCode,
                         onDone = ::continueLogin
                     )
                     Spacer(Modifier.height(6.dp))
@@ -293,11 +379,16 @@ fun LoginScreen(onSignedIn: () -> Unit) {
                             .border(1.dp, GlassBorder, CircleShape)
                             .clip(CircleShape)
                             .background(Brush.horizontalGradient(listOf(Color(0xBD175F53), Color(0xDA0B554B))))
-                            .clickable(enabled = !animatingClick, role = Role.Button, onClick = ::continueLogin),
+                            .clickable(enabled = !animatingClick && !busy, role = Role.Button, onClick = ::continueLogin),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            if (enteringPassword) "Sign In" else "Continue",
+                            when {
+                                busy && enteringCode -> "Signing In…"
+                                busy -> "Sending Code…"
+                                enteringCode -> "Sign In"
+                                else -> "Continue"
+                            },
                             fontFamily = DMSans,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Medium,
@@ -352,7 +443,7 @@ fun LoginScreen(onSignedIn: () -> Unit) {
                             .clip(CircleShape)
                             .background(Brush.horizontalGradient(listOf(WhiteGlass, Color.White.copy(alpha = .34f))))
                             .clickable(role = Role.Button) {
-                                message = "Face ID is unavailable in this demo. Use mobile 000000."
+                                message = "Face ID sign-in isn't available yet. Sign in with your mobile number."
                             },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -382,9 +473,7 @@ private fun GlassLoginField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     leadingIcon: Int,
-    password: Boolean,
-    passwordVisible: Boolean,
-    onTogglePassword: () -> Unit,
+    code: Boolean,
     onDone: () -> Unit
 ) {
     BasicTextField(
@@ -395,11 +484,10 @@ private fun GlassLoginField(
         textStyle = TextStyle(fontFamily = DMSans, fontSize = 16.sp, color = Color.White),
         cursorBrush = SolidColor(Color.White),
         keyboardOptions = KeyboardOptions(
-            keyboardType = if (password) KeyboardType.Password else KeyboardType.Phone,
+            keyboardType = if (code) KeyboardType.NumberPassword else KeyboardType.Phone,
             imeAction = ImeAction.Done
         ),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
-        visualTransformation = if (password && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         decorationBox = { field ->
             Row(
                 modifier = Modifier
@@ -411,7 +499,7 @@ private fun GlassLoginField(
                     .padding(start = 19.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (password) {
+                if (code) {
                     Icon(Icons.Outlined.Lock, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 } else {
                     Image(painterResource(leadingIcon), null, modifier = Modifier.size(22.dp))
@@ -427,16 +515,6 @@ private fun GlassLoginField(
                         )
                     }
                     field()
-                }
-                if (password) {
-                    IconButton(onClick = onTogglePassword, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                            tint = Color.White,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
                 }
             }
         }
