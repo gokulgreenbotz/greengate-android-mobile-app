@@ -194,7 +194,7 @@ private fun PropertyCard(s: Float, onClick: () -> Unit) {
             Column(Modifier.weight(1f).padding(horizontal = 12.u(s))) {
                 Text("Marina Bay Residences", color = MeadowInk, fontFamily = DMSans, fontSize = 16.t(s), lineHeight = 20.t(s),
                     fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Tower A · Unit 12-03", color = MeadowMuted, fontFamily = DMSans, fontSize = 13.5f.t(s), lineHeight = 18.t(s), maxLines = 1)
+                Text("${ResidentSession.condoName} · ${ResidentSession.unitLabel}", color = MeadowMuted, fontFamily = DMSans, fontSize = 13.5f.t(s), lineHeight = 18.t(s), maxLines = 1)
             }
             Icon(Icons.Rounded.ChevronRight, null, Modifier.size(24.u(s)), tint = MeadowInk)
         }

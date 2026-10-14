@@ -195,7 +195,7 @@ private fun MarinaHeader(navController: NavController, onSos: () -> Unit) {
                     Modifier.align(Alignment.BottomEnd).offset(x = 16.dp).fillMaxWidth(.76f).height(92.dp).softArtEdges(),
                     crop = intArrayOf(20, 45, 560, 165), scale = ContentScale.Crop)
                 Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp)) {
-                    LocationPill("Tower A · Unit 12-03", Icons.Rounded.Apartment) { navController.navigate(Screen.LocationPicker.route) }
+                    LocationPill(ResidentSession.unitLabel, Icons.Rounded.Apartment) { navController.navigate(Screen.LocationPicker.route) }
                 }
                 Column(Modifier.align(Alignment.BottomStart).padding(bottom = 15.dp)) {
                     Box(Modifier.padding(bottom = 10.dp).size(34.dp, 2.dp).background(MarinaCoral, CircleShape))

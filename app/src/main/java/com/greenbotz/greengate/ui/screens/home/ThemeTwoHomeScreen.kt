@@ -131,9 +131,9 @@ private fun FreshHeader(nav: NavController, s: Float, onSos: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = CircleShape, color = Color.White, shadowElevation = 2.u(s), border = BorderStroke(1.dp, FreshLine)) {
                 Row(Modifier.height(40.u(s)), verticalAlignment = Alignment.CenterVertically) {
-                    PickerSegment(Icons.Outlined.Apartment, "Tower A", s) { nav.navigate(Screen.LocationPicker.route) }
+                    PickerSegment(Icons.Outlined.Apartment, ResidentSession.condoName, s) { nav.navigate(Screen.LocationPicker.route) }
                     Box(Modifier.width(1.dp).height(20.u(s)).background(FreshLine))
-                    PickerSegment(Icons.Outlined.Home, "Unit 12-03", s) { nav.navigate(Screen.LocationPicker.route) }
+                    PickerSegment(Icons.Outlined.Home, ResidentSession.unitLabel, s) { nav.navigate(Screen.LocationPicker.route) }
                 }
             }
             Spacer(Modifier.weight(1f))

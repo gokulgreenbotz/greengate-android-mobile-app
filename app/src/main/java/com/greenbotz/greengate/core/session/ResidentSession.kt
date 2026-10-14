@@ -39,8 +39,29 @@ object ResidentSession {
     /** First name shown in greetings: the signed-in resident's, "Alex" for the demo account. */
     val firstName: String
         get() = when (val s = state) {
-            is State.SignedIn -> s.households.firstOrNull()?.name?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: "there"
+            is State.SignedIn -> s.households.firstOrNull()?.name?.split(' ')
+                ?.firstOrNull { it.isNotBlank() && it.trimEnd('.').lowercase() !in Titles } ?: "there"
             else -> "Alex"
+        }
+
+    private val Titles = setOf("mr", "mrs", "ms", "miss", "mdm", "madam", "dr", "prof", "mx", "master")
+
+    /** Condo of the signed-in resident's first household; blank until it loads. */
+    val condoName: String
+        get() = when (val s = state) {
+            is State.SignedIn -> s.households.firstOrNull()?.condoName.orEmpty()
+            else -> "Marina Bay Residences"
+        }
+
+    /** Block and unit of the first household, e.g. "Block A · #05-01". */
+    val unitLabel: String
+        get() = when (val s = state) {
+            is State.SignedIn -> s.households.firstOrNull()?.let { h ->
+                val unit = if (h.floor.isNotBlank() && h.unit.isNotBlank()) "#${h.floor}-${h.unit}" else h.unit
+                listOf(h.block.takeIf { it.isNotBlank() }?.let { "Block $it" }, unit.takeIf { it.isNotBlank() })
+                    .filterNotNull().joinToString(" · ")
+            }.orEmpty()
+            else -> "Tower A · Unit 12-03"
         }
 
     /** Server the app signs in against. Debug builds start on Stage, release builds on Production. */

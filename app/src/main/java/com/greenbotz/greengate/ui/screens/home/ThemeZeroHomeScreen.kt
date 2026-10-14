@@ -169,14 +169,14 @@ private fun ReferenceHeader(nav: NavController, s: Float, height: Dp, onSos: () 
             Row(Modifier.heightIn(min = 28.u(s)).clickable(role = Role.Button) { nav.navigate(Screen.LocationPicker.route) },
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.LocationOn, null, Modifier.size(15.u(s)), tint = Color.White)
-                Text("Marina Bay Residences", Modifier.padding(start = 3.u(s)), color = Color.White, fontFamily = DMSans,
+                Text(ResidentSession.condoName, Modifier.padding(start = 3.u(s)), color = Color.White, fontFamily = DMSans,
                     fontSize = 12.t(s), maxLines = 1)
             }
             IconButton({ nav.navigate(Screen.CommunityInfo.route) }, Modifier.size(28.u(s))) {
                 Icon(Icons.Outlined.Info, "About Marina Bay Residences", Modifier.size(16.u(s)), tint = Color.White)
             }
             Spacer(Modifier.weight(1f))
-            ReferenceChip("Tower A · Unit 12-03", Icons.Rounded.Apartment, 168f, s) { nav.navigate(Screen.LocationPicker.route) }
+            ReferenceChip(ResidentSession.unitLabel, Icons.Rounded.Apartment, 168f, s) { nav.navigate(Screen.LocationPicker.route) }
         }
     }
 }
