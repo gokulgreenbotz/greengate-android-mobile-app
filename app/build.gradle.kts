@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Resident sign-in API (app-web-ui-client-onboarding). Debug builds can point elsewhere with
+// residentApi.baseUrl in local.properties, e.g. http://10.0.2.2:5176 for a local backend on the emulator.
+val residentApiBaseUrl = "https://onboarding.gbotz.site"
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val debugResidentApiBaseUrl = localProperties.getProperty("residentApi.baseUrl") ?: residentApiBaseUrl
 
 android {
     namespace = "com.example.greengate"
@@ -15,10 +25,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["usesCleartextTraffic"] = false
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "RESIDENT_API_BASE_URL", "\"$debugResidentApiBaseUrl\"")
+            manifestPlaceholders["usesCleartextTraffic"] = debugResidentApiBaseUrl.startsWith("http://")
+        }
         release {
+            buildConfigField("String", "RESIDENT_API_BASE_URL", "\"$residentApiBaseUrl\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -37,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

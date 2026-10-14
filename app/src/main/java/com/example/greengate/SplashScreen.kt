@@ -13,13 +13,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.greengate.ui.theme.GreenGateTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun SplashScreen(
     onFinished: () -> Unit,
-    displayMillis: Long = 2500L
+    displayMillis: Long = 2500L,
+    ready: Boolean = true
 ) {
     var visible by remember { mutableStateOf(true) }
+    val isReady by rememberUpdatedState(ready)
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = 450),
@@ -28,6 +31,8 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         delay(displayMillis)
+        // Stay up until the saved sign-in has been checked.
+        snapshotFlow { isReady }.first { it }
         visible = false
         delay(450)
         onFinished()

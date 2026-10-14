@@ -1,6 +1,8 @@
 package com.example.greengate
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -10,6 +12,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +37,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.greengate.ui.theme.DMSans
@@ -38,6 +45,8 @@ import com.example.greengate.ui.theme.PrimaryGreen
 import com.example.greengate.ui.theme.SecondaryGreen
 import com.example.greengate.ui.theme.SoftGreen
 import java.util.Calendar
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** A calendar day; months are 0-based like [Calendar.MONTH]. */
 internal data class BookingDay(val year: Int, val month: Int, val day: Int) : Comparable<BookingDay> {
@@ -288,15 +297,18 @@ private fun SlotPicker(
     var guests by remember { mutableIntStateOf(1) }
     val nowHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     // Once today's last morning slot has gone, open on the afternoon.
-    var period by remember(day) {
-        mutableStateOf(if (day == today && nowHour >= SlotPeriod.MORNING.hours.last) SlotPeriod.AFTERNOON else SlotPeriod.MORNING)
-    }
+    val opening = if (day == today && nowHour >= SlotPeriod.MORNING.hours.last) SlotPeriod.AFTERNOON else SlotPeriod.MORNING
+    val pager = rememberPagerState(initialPage = opening.ordinal) { SlotPeriod.entries.size }
+    LaunchedEffect(day) { pager.scrollToPage(opening.ordinal) }
+    val scope = rememberCoroutineScope()
     Column {
         Text(day.longLabel(), fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Select Time", Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-            PeriodToggle(period) { period = it }
+            PeriodToggle(pager) { period ->
+                scope.launch { pager.animateScrollToPage(period.ordinal, animationSpec = periodSlide()) }
+            }
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -305,10 +317,16 @@ private fun SlotPicker(
             LegendDot(FacilityMuted.copy(alpha = .4f), "Full")
         }
         Spacer(Modifier.height(12.dp))
-        // The chosen slot stays chosen when switching halves; the bar below still shows it.
-        AnimatedContent(period, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "slotPeriod") { shown ->
-            Column {
-                shown.hours.chunked(SlotColumns).forEach { row ->
+        // Swipe the grid or tap the toggle to slide between halves. The chosen slot stays chosen
+        // across them, and the bar below still shows it.
+        HorizontalPager(
+            pager, Modifier.fillMaxWidth(), pageSpacing = 16.dp, beyondViewportPageCount = 1,
+            verticalAlignment = Alignment.Top,
+            flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = periodSlide())
+        ) { page ->
+            // Every page is as tall as the longest half, so the panel doesn't jump as it slides.
+            Column(Modifier.heightIn(min = SlotRowHeight * SlotPeriodRows)) {
+                SlotPeriod.entries[page].hours.chunked(SlotColumns).forEach { row ->
                     Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { hour ->
                             val state = slotState(facilityName, day, hour, busy, today, nowHour)
@@ -335,26 +353,40 @@ private fun SlotPicker(
 }
 
 private const val SlotColumns = 4
+// A chip row is 48dp plus its 10dp bottom padding.
+private val SlotRowHeight = 58.dp
+private val SlotPeriodRows = SlotPeriod.entries.maxOf { (it.hours.count() + SlotColumns - 1) / SlotColumns }
+private val PeriodSegmentWidth = 88.dp
 
-/** Morning / Afternoon segmented switch beside "Select Time". */
+/** Quick and settled: the halves trade places in a quarter second, for taps and swipes alike. */
+private fun periodSlide() = tween<Float>(250, easing = FastOutSlowInEasing)
+
+/**
+ * Morning / Afternoon segmented switch beside "Select Time". Its highlight is placed from the
+ * pager's live scroll position, so it glides along with a swipe rather than jumping at the end.
+ */
 @Composable
-private fun PeriodToggle(selected: SlotPeriod, onSelect: (SlotPeriod) -> Unit) {
-    Row(
-        Modifier.clip(CircleShape).background(Color(0xE6FFFFFF)).border(1.dp, FacilityGlassBorder, CircleShape)
-            .selectableGroup().padding(3.dp)
-    ) {
-        SlotPeriod.entries.forEach { period ->
-            val active = period == selected
-            Box(
-                Modifier.height(32.dp).clip(CircleShape)
-                    .background(if (active) themed(Color(0xFFCDF3E4), ClassicMint) else Color.Transparent)
-                    .selectable(active, role = Role.Tab) { onSelect(period) }
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(period.label, fontFamily = DMSans, fontSize = 13.sp,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (active) FacilityGreen else FacilityInk)
+private fun PeriodToggle(pager: PagerState, onSelect: (SlotPeriod) -> Unit) {
+    val current by remember { derivedStateOf { (pager.currentPage + pager.currentPageOffsetFraction).roundToInt() } }
+    Box(Modifier.clip(CircleShape).background(Color(0xE6FFFFFF)).border(1.dp, FacilityGlassBorder, CircleShape).padding(3.dp)) {
+        Box(
+            Modifier.offset {
+                val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, SlotPeriod.entries.lastIndex.toFloat())
+                IntOffset((position * PeriodSegmentWidth.toPx()).roundToInt(), 0)
+            }.size(PeriodSegmentWidth, 32.dp).background(themed(Color(0xFFCDF3E4), ClassicMint), CircleShape)
+        )
+        Row(Modifier.selectableGroup()) {
+            SlotPeriod.entries.forEach { period ->
+                val active = period.ordinal == current
+                Box(
+                    Modifier.size(PeriodSegmentWidth, 32.dp).clip(CircleShape)
+                        .selectable(active, role = Role.Tab) { onSelect(period) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(period.label, fontFamily = DMSans, fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (active) FacilityGreen else FacilityInk)
+                }
             }
         }
     }

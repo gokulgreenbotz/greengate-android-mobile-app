@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.greengate.core.auth.ResidentSession
 import com.example.greengate.core.call.ReceiverCallController
 import com.example.greengate.core.call.provider.ReceiverCallState
 import com.example.greengate.ui.screens.CallTestHarnessScreen
@@ -38,6 +38,7 @@ import android.content.Intent
 import android.os.Build
 import android.view.WindowManager
 import com.example.greengate.core.call.signaling.CallSignalingService
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppPreferences.load(applicationContext)
+        ResidentSession.init(applicationContext)
         enableEdgeToEdge()
 
         configureLockscreenFlags()
@@ -57,13 +59,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             GreenGateTheme {
                 var showSplash by remember { mutableStateOf(true) }
-                var signedIn by rememberSaveable { mutableStateOf(false) }
+                val session = ResidentSession.state
+                val scope = rememberCoroutineScope()
+                LaunchedEffect(Unit) { ResidentSession.restore() }
                 if (showSplash) {
-                    SplashScreen(onFinished = { showSplash = false })
-                } else if (!signedIn) {
-                    LoginScreen(onSignedIn = { signedIn = true })
+                    SplashScreen(
+                        onFinished = { showSplash = false },
+                        ready = session != ResidentSession.State.Restoring
+                    )
+                } else if (session is ResidentSession.State.SignedIn || session == ResidentSession.State.Demo) {
+                    MainScreen(controller = callController, onLogout = { scope.launch { ResidentSession.signOut() } })
                 } else {
-                    MainScreen(controller = callController, onLogout = { signedIn = false })
+                    LoginScreen()
                 }
             }
         }

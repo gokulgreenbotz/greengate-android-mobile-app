@@ -7,8 +7,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
@@ -19,6 +21,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -146,6 +151,24 @@ private fun FacilityImage(@DrawableRes id: Int, modifier: Modifier, contentScale
     else Box(modifier)
 }
 
+private const val PanelFadeMillis = 150
+private const val PanelShrinkMillis = 220
+private const val PanelScrollMillis = 250
+
+/**
+ * Scrolls just far enough for the item with [key] to end above the bottom padding, but never so far
+ * that its top (the facility card) goes under the top padding; a panel taller than the screen stops
+ * with its card at the top.
+ */
+private suspend fun LazyListState.reveal(key: Any) {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.find { it.key == key } ?: return
+    // Item offsets start after the top padding; viewportEndOffset reaches into the bottom padding.
+    val bottomLimit = info.viewportEndOffset - info.afterContentPadding
+    val distance = minOf(item.offset + item.size - bottomLimit, item.offset)
+    if (distance > 0) animateScrollBy(distance.toFloat(), tween(PanelScrollMillis, easing = FastOutSlowInEasing))
+}
+
 @Composable
 fun BookFacilityScreen(navController: NavController) {
     val context = LocalContext.current
@@ -166,7 +189,11 @@ fun BookFacilityScreen(navController: NavController) {
         val fromAbout = navController.currentBackStackEntry?.savedStateHandle?.remove<String>(ExpandFacilityKey)
         mutableStateOf(Facilities.find { it.id == fromAbout }?.name)
     }
-    val visible = Facilities.filter { category == FacilityCategory.ALL || it.category == category }
+    // The facility just opened, whose picker scrolls into view once it has finished expanding.
+    // Cleared after that one scroll, so scrolling the open picker back on screen later doesn't jump.
+    var scrollToName by remember { mutableStateOf(expandedName) }
+    val listState = rememberLazyListState()
+    val visible =Facilities.filter { category == FacilityCategory.ALL || it.category == category }
 
     Box(Modifier.fillMaxSize().background(FacilityBackdrop), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
@@ -184,6 +211,7 @@ fun BookFacilityScreen(navController: NavController) {
                 }
             }
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.weight(1f)
@@ -193,12 +221,25 @@ fun BookFacilityScreen(navController: NavController) {
                     Column {
                         FacilityCard(facility, expanded, onAbout = { navController.navigate(Screen.FacilityAbout.create(facility.id)) }) {
                             expandedName = if (expanded) null else facility.name
+                            scrollToName = expandedName
                         }
                         AnimatedVisibility(
                             visible = expanded,
-                            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+                            // The panel takes its full height at once and only fades, so the list can
+                            // scroll to it straight away instead of waiting for it to unroll.
+                            enter = fadeIn(tween(PanelFadeMillis)),
+                            // Switching to another facility drops this panel instantly: shrinking it would
+                            // shift the list under that facility's scroll and overshoot it.
+                            exit = if (expandedName != null) ExitTransition.None
+                                else shrinkVertically(tween(PanelShrinkMillis), shrinkTowards = Alignment.Top) + fadeOut(tween(PanelFadeMillis))
                         ) {
+                            LaunchedEffect(Unit) {
+                                if (scrollToName != facility.name) return@LaunchedEffect
+                                scrollToName = null
+                                // One frame, so the list has measured the panel before working out the scroll.
+                                withFrameNanos { }
+                                listState.reveal(facility.name)
+                            }
                             FacilityBookingPanel(
                                 facilityName = facility.name,
                                 busy = facility.slotsLeft != null,
