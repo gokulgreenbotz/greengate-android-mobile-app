@@ -11,6 +11,9 @@ import org.json.JSONObject
 /** Path of the resident app API on the onboarding service. */
 const val MOBILE_API_PATH = "api/db/resident-app"
 
+/** Path of the kiosk call WebSocket on the onboarding service. */
+const val CALL_SOCKET_PATH = "api/db/ws/calls"
+
 /** Onboarding service deployments the app can sign in against. Chosen in Profile. */
 enum class ApiEnvironment(val label: String, val baseUrl: String) {
     STAGE("Stage", "https://client-onboarding.up.railway.app"),

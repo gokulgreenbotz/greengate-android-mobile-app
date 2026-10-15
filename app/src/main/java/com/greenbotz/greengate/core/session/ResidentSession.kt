@@ -117,6 +117,29 @@ object ResidentSession {
         }
     }
 
+    /**
+     * WebSocket URL for kiosk calls on the onboarding backend, or null when there is
+     * nothing to listen to: not signed in, or on Production, whose calls come from
+     * com-core-service.
+     */
+    val callSocketUrl: String?
+        get() = if (state is State.SignedIn && environment != ApiEnvironment.PROD) {
+            environment.baseUrl.replaceFirst("http", "ws") + "/" + CALL_SOCKET_PATH
+        } else null
+
+    /**
+     * Access token for the call WebSocket, or null when signed out. [forceRefresh]
+     * after the server refused the previous one (access tokens last 30 minutes).
+     */
+    suspend fun callSocketToken(forceRefresh: Boolean = false): String? {
+        if (state !is State.SignedIn) return null
+        return try {
+            if (forceRefresh) refreshAccessToken(accessToken) else accessToken ?: refreshAccessToken(null)
+        } catch (_: ResidentApiException) {
+            null
+        }
+    }
+
     /** Asks for an SMS code. [phone] includes the country code. Returns seconds until "Resend" is allowed. */
     suspend fun sendCode(phone: String): Int = io { api.sendCode(phone) }
 

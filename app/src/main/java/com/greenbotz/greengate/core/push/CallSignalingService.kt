@@ -3,19 +3,15 @@ package com.greenbotz.greengate.core.push
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.greenbotz.greengate.MainActivity
 import com.greenbotz.greengate.R
-import com.greenbotz.greengate.core.call.provider.SharedCallConfig
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -50,8 +46,6 @@ class CallSignalingService : Service() {
         const val FOREGROUND_SERVICE_NOTIFICATION_ID = 8888
         private const val SERVICE_CHANNEL_ID = "greengate_listener_silent"
         private const val LEGACY_SERVICE_CHANNEL_ID = "greengate_service_channel"
-        /** Incoming-call notification removes itself after this, as a safety net. */
-        private const val INCOMING_NOTIFICATION_TIMEOUT_MS = 45_000L
 
         const val EXTRA_CALL_ID = "extra_call_id"
         const val EXTRA_VISITOR_NAME = "extra_visitor_name"
@@ -237,101 +231,8 @@ class CallSignalingService : Service() {
         }
     }
 
-    private fun triggerIncomingCallNotificationAndActivity(json: JSONObject) {
-        try {
-            val callId = json.optString("callId", "call-${System.currentTimeMillis()}")
-            val visitorName = json.optString("visitorName", "Visitor at Kiosk")
-            val unitName = json.optString("unitName", "Unit 1204")
-            val kioskName = json.optString("kioskName", "Main Gate Kiosk")
-
-            val provider = json.optString("provider", "twilio")
-            val twilioObj = json.optJSONObject("twilio")
-            val vonageObj = json.optJSONObject("vonage")
-
-            val roomName = twilioObj?.optString("roomName")?.ifBlank { null }
-                ?: json.optString("roomName").ifBlank { SharedCallConfig.twilioRoomName }
-            val accessToken = twilioObj?.optString("accessToken")?.ifBlank { null }
-                ?: json.optString("accessToken").ifBlank { SharedCallConfig.twilioReceiverToken }
-
-            val vonageApiKey = vonageObj?.optString("apiKey")?.ifBlank { null }
-                ?: json.optString("apiKey").ifBlank { SharedCallConfig.vonageApiKey }
-            val vonageSessionId = vonageObj?.optString("sessionId")?.ifBlank { null }
-                ?: json.optString("sessionId").ifBlank { SharedCallConfig.vonageSessionId }
-            val vonageToken = vonageObj?.optString("token")?.ifBlank { null }
-                ?: json.optString("token").ifBlank { SharedCallConfig.vonageToken }
-
-            // App is open: the in-app ringing screen (CallSignalingManager)
-            // handles this call. Don't show a notification over it.
-            if (IncomingCallNotifier.appInForeground) {
-                Log.i("CallSignalingService", "App in foreground — skipping incoming-call notification")
-                return
-            }
-
-            // 1. Wake up phone CPU and turn screen on
-            wakeUpDevice()
-
-            // 2. Intent to open MainActivity
-            val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra(EXTRA_CALL_ID, callId)
-                putExtra(EXTRA_VISITOR_NAME, visitorName)
-                putExtra(EXTRA_UNIT_NAME, unitName)
-                putExtra(EXTRA_KIOSK_NAME, kioskName)
-                putExtra(EXTRA_PROVIDER, provider)
-                putExtra(EXTRA_ROOM_NAME, roomName)
-                putExtra(EXTRA_ACCESS_TOKEN, accessToken)
-                putExtra(EXTRA_VONAGE_API_KEY, vonageApiKey)
-                putExtra(EXTRA_VONAGE_SESSION_ID, vonageSessionId)
-                putExtra(EXTRA_VONAGE_TOKEN, vonageToken)
-            }
-
-            val pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                fullScreenIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            // 3. High priority notification with Full Screen Intent
-            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("INCOMING KIOSK CALL")
-                .setContentText("$visitorName ($unitName)")
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setFullScreenIntent(pendingIntent, true)
-                .setContentIntent(pendingIntent)
-                .setAutoCancel(true)
-                .setOngoing(true)
-                // Safety net: never leave a stale "incoming call" behind if the
-                // app process is killed before it can cancel the notification.
-                .setTimeoutAfter(INCOMING_NOTIFICATION_TIMEOUT_MS)
-                .build()
-
-            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIFICATION_ID, notification)
-
-            // 4. Directly launch activity to bring call screen to front immediately
-            startActivity(fullScreenIntent)
-
-        } catch (e: Exception) {
-            Log.e("CallSignalingService", "Error triggering incoming call notification", e)
-        }
-    }
-
-    private fun wakeUpDevice() {
-        try {
-            val pm = getSystemService(POWER_SERVICE) as PowerManager
-            @Suppress("DEPRECATION")
-            val wakeLock = pm.newWakeLock(
-                PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
-                "GreenGate:IncomingCallWakeLock"
-            )
-            wakeLock.acquire(10_000L) // Hold wake lock for 10s to ensure screen lights up
-        } catch (e: Exception) {
-            Log.e("CallSignalingService", "WakeLock error", e)
-        }
-    }
+    private fun triggerIncomingCallNotificationAndActivity(json: JSONObject) =
+        IncomingCallNotifier.show(this, json)
 
     override fun onDestroy() {
         executor?.shutdownNow()

@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import org.json.JSONObject
 
 private const val CHANNEL_ID = "announcements"
 
@@ -47,6 +48,13 @@ class GreenGateMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // Kiosk call from the onboarding backend: a data-only message, so this runs
+        // with the app in the background too. Other pushes (com-core's own call
+        // pushes, announcements) are not ours to ring for.
+        if (message.data["type"] == "kiosk_call") {
+            handleKioskCall(message.data)
+            return
+        }
         val title = message.notification?.title ?: return
         val body = message.notification?.body.orEmpty()
         val granted = Build.VERSION.SDK_INT < 33 ||
@@ -70,5 +78,14 @@ class GreenGateMessagingService : FirebaseMessagingService() {
             .setContentIntent(open)
             .build()
         NotificationManagerCompat.from(this).notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun handleKioskCall(data: Map<String, String>) {
+        when (data["event"]) {
+            // Same keys as the relay payload, so the same ringing path handles it.
+            "CALL_INITIATED" -> IncomingCallNotifier.show(this, JSONObject(data), fromPush = true)
+            // Taken down here; a ringing screen already open ends by its own timeout.
+            "CALL_ENDED" -> IncomingCallNotifier.cancel(this)
+        }
     }
 }

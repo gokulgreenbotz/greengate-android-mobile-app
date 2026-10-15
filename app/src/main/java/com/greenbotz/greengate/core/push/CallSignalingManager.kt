@@ -6,13 +6,26 @@ import com.greenbotz.greengate.core.call.ReceiverCallController
 import com.greenbotz.greengate.core.call.provider.CallProvider
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
 import com.greenbotz.greengate.core.call.provider.SharedCallConfig
+import com.greenbotz.greengate.core.session.ResidentSession
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONObject
 
 class CallSignalingManager(
@@ -38,6 +51,7 @@ class CallSignalingManager(
     private var lastDoorResultRequestId: String? = null
 
     fun startListening() {
+        startSocket()
         if (executor != null && !executor!!.isShutdown) return
 
         executor = Executors.newSingleThreadScheduledExecutor()
@@ -47,6 +61,100 @@ class CallSignalingManager(
 
         Log.i("CallSignalingManager", "Started HTTPS real-time call signaling listener: $signalingUrl")
     }
+
+    // ---- WebSocket (onboarding backend, Stage/Local) ----
+    // Open only while this manager is listening, i.e. while the app is on screen;
+    // calls that arrive with the app closed come by FCM instead. The server sends
+    // the same JSON the relay carries, so it goes through the same handlers.
+
+    private val socketClient = OkHttpClient.Builder()
+        .pingInterval(25, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .build()
+    private val socketScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var socketJob: Job? = null
+    @Volatile private var socket: WebSocket? = null
+
+    /**
+     * Closes the socket while the app is off screen: the server rings sessions
+     * without a live socket by FCM, so a socket left open in the background would
+     * swallow the call. [startSocket] reopens it when the app is back.
+     */
+    fun pauseSocket() {
+        socketJob?.cancel()
+        socketJob = null
+        socket?.close(1000, null)
+        socket = null
+    }
+
+    fun startSocket() {
+        if (ResidentSession.callSocketUrl == null || socketJob?.isActive == true) return
+        socketJob = socketScope.launch {
+            var forceRefresh = false
+            var failures = 0
+            while (isActive) {
+                val url = ResidentSession.callSocketUrl ?: break
+                val token = ResidentSession.callSocketToken(forceRefresh) ?: break
+                forceRefresh = false
+                val opened = AtomicBoolean(false)
+                val closed = CompletableDeferred<Int>()
+                val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+                socket = socketClient.newWebSocket(request, object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: Response) {
+                        opened.set(true)
+                        Log.i("CallSignalingManager", "Call socket connected")
+                    }
+
+                    override fun onMessage(webSocket: WebSocket, text: String) = handleSocketMessage(text)
+
+                    override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                        closed.complete(0)
+                    }
+
+                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                        Log.w("CallSignalingManager", "Call socket failed: ${t.message}")
+                        closed.complete(response?.code ?: 0)
+                    }
+                })
+                val status = closed.await()
+                socket = null
+                if (status == 401) forceRefresh = true
+                failures = if (opened.get()) 0 else failures + 1
+                delay(minOf(30_000L, 1_000L shl minOf(failures, 5)))
+            }
+        }
+    }
+
+    private fun handleSocketMessage(text: String) {
+        try {
+            val json = JSONObject(text)
+            val callId = json.optString("callId")
+            when (json.optString("event")) {
+                "CALL_INITIATED" -> if (callId.isNotBlank() && callId != lastProcessedCallId) {
+                    lastProcessedCallId = callId
+                    lastProcessedTimestamp = json.optLong("timestamp", 0)
+                    Log.i("CallSignalingManager", "SOCKET SIGNAL RECEIVED: INCOMING CALL callId=$callId")
+                    handleIncomingCall(json)
+                }
+                // Hang-up by the kiosk, or "answered on another phone of this household".
+                "CALL_ENDED" -> if (callId.isNotBlank() && callId == controller.currentCredentials?.callId) {
+                    controller.onKioskEndedCall(callId)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("CallSignalingManager", "Bad call socket message: ${e.message}")
+        }
+    }
+
+    private fun sendOverSocket(event: String, callId: String?, reason: String? = null) {
+        if (callId.isNullOrBlank()) return
+        val payload = JSONObject().put("event", event).put("callId", callId)
+        if (reason != null) payload.put("reason", reason)
+        socket?.send(payload.toString())
+    }
+
+    /** Tells the server this phone answered, so the household's other phones stop ringing. */
+    fun notifyAnswered(callId: String?) = sendOverSocket("CALL_ANSWERED", callId)
 
     private fun pollCallSignal() {
         try {
@@ -219,6 +327,7 @@ class CallSignalingManager(
     }
 
     fun broadcastCallEnded(callId: String?, reason: String = "HANGUP") {
+        sendOverSocket("CALL_ENDED", callId, reason)
         postToKiosk(
             JSONObject().apply {
                 put("event", "CALL_ENDED")
@@ -277,6 +386,7 @@ class CallSignalingManager(
     fun stop() {
         executor?.shutdownNow()
         executor = null
+        pauseSocket()
     }
 
     private companion object {

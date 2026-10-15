@@ -91,6 +91,7 @@ class ReceiverCallController(
         ringTimeoutJob?.cancel()
         // Answered: remove the incoming-call notification.
         IncomingCallNotifier.cancel(appContext)
+        onCallAnswered?.invoke(creds.callId)
         _state.value = ReceiverCallState.Connecting
 
         callJob = scope.launch {
@@ -216,6 +217,9 @@ class ReceiverCallController(
         val withReason = onCallEndedWithReason
         if (withReason != null) withReason(callId, reason) else onCallEndedSignal?.invoke(callId)
     }
+
+    /** Told the callId when this phone answers, so the household's other phones can stop ringing. */
+    var onCallAnswered: ((String?) -> Unit)? = null
 
     /** Set by MainActivity: sends the open-gate request to the kiosk (callId, endCall). */
     var onOpenGateRequested: ((String?, Boolean, String) -> Unit)? = null

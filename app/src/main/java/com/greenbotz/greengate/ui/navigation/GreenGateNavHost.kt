@@ -18,6 +18,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
@@ -94,7 +97,23 @@ fun MainScreen(
             activeController.onOpenGateRequested = { callId, endCall, requestId ->
                 mgr.requestOpenGate(callId, endCall, requestId)
             }
+            // Other phones of the household stop ringing once this one answers.
+            activeController.onCallAnswered = { callId -> mgr.notifyAnswered(callId) }
         }
+    }
+
+    // The call socket is for "app is open"; with the app off screen, calls come by FCM.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, signalingManager) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> signalingManager.startSocket()
+                Lifecycle.Event.ON_STOP -> signalingManager.pauseSocket()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
