@@ -53,6 +53,7 @@ class CallSignalingManager(
 
     fun startListening() {
         startSocket()
+        if (!ResidentSession.usesCallRelay) return
         if (executor != null && !executor!!.isShutdown) return
 
         executor = Executors.newSingleThreadScheduledExecutor()
@@ -140,6 +141,14 @@ class CallSignalingManager(
                 // Hang-up by the kiosk, or "answered on another phone of this household".
                 "CALL_ENDED" -> if (callId.isNotBlank() && callId == controller.currentCredentials?.callId) {
                     controller.onKioskEndedCall(callId)
+                }
+                // The kiosk's answer to "Open Gate".
+                "DOOR_UNLOCKED", "DOOR_UNLOCK_FAILED" -> if (callId == controller.currentCredentials?.callId) {
+                    controller.onDoorUnlockResult(
+                        json.optString("event") == "DOOR_UNLOCKED",
+                        json.optString("message"),
+                        json.optString("requestId")
+                    )
                 }
             }
         } catch (e: Exception) {
@@ -314,6 +323,8 @@ class CallSignalingManager(
     private val writeQueue = Executors.newSingleThreadExecutor()
 
     private fun postToKiosk(payload: JSONObject, what: String) {
+        // Stage/Local: the message already went over the WebSocket; there is no relay.
+        if (!ResidentSession.usesCallRelay) return
         writeQueue.execute {
             try {
                 payload.put("sender", "MOBILE_RECEIVER")
@@ -371,6 +382,14 @@ class CallSignalingManager(
      */
     fun requestOpenGate(callId: String?, endCall: Boolean, requestId: String) {
         if (callId.isNullOrBlank()) return
+        socket?.send(
+            JSONObject()
+                .put("event", "OPEN_GATE")
+                .put("callId", callId)
+                .put("endCall", endCall)
+                .put("requestId", requestId)
+                .toString()
+        )
         postToKiosk(
             JSONObject().apply {
                 put("event", "OPEN_GATE")

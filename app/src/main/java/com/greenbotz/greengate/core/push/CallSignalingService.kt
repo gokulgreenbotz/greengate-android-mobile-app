@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.ResidentSession
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -160,6 +161,8 @@ class CallSignalingService : Service() {
     }
 
     private fun startPolling() {
+        // Stage/Local: calls come by FCM and WebSocket; the relay is not polled.
+        if (!ResidentSession.usesCallRelay) return
         if (executor != null && !executor!!.isShutdown) return
 
         executor = Executors.newSingleThreadScheduledExecutor()

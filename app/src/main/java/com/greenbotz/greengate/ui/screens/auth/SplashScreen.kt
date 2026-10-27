@@ -40,7 +40,7 @@ fun SplashScreen(
     }
 
     Image(
-        painter = painterResource(R.drawable.splash_bg),
+        painter = painterResource(R.drawable.splash_greengate),
         contentDescription = "Welcome. Your community, now smarter.",
         modifier = Modifier.fillMaxSize().alpha(alpha),
         alignment = Alignment.CenterStart,

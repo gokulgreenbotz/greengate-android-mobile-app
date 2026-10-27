@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** Path of the resident app API on the onboarding service. */
@@ -55,6 +56,8 @@ internal class ResidentAuthApi(apiUrl: String) {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
+    // Claude can take a while to answer; the server gives up after about 40 seconds.
+    private val assistantClient by lazy { client.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
     /** Texts a code if the number is registered (the response is the same either way). Returns seconds until a resend is allowed. */
     fun sendCode(phone: String): Int =
@@ -81,6 +84,20 @@ internal class ResidentAuthApi(apiUrl: String) {
         execute(request("/device/fcm-token", accessToken).put(JSONObject().put("fcmToken", fcmToken).toString().toRequestBody(JsonType)).build())
     }
 
+    /** Whether the server answers Green Bot with Claude (it has an Anthropic key). */
+    fun greenBotEnabled(accessToken: String): Boolean =
+        execute(request("/assistant/status", accessToken).get().build()).optBoolean("enabled", false)
+
+    /**
+     * Green Bot reply from Claude, through the onboarding service (the Anthropic key stays there).
+     * [messages] are `{ role, text }` turns, oldest first, ending with the resident's question.
+     * Returns `{ reply, action }`.
+     */
+    fun askGreenBot(accessToken: String, messages: JSONArray): JSONObject = execute(
+        request("/assistant/chat", accessToken).post(JSONObject().put("messages", messages).toString().toRequestBody(JsonType)).build(),
+        assistantClient
+    )
+
     private fun post(path: String, body: JSONObject) =
         execute(request(path).post(body.toString().toRequestBody(JsonType)).build())
 
@@ -88,9 +105,9 @@ internal class ResidentAuthApi(apiUrl: String) {
         if (accessToken != null) header("Authorization", "Bearer $accessToken")
     }
 
-    private fun execute(request: Request): JSONObject {
+    private fun execute(request: Request, http: OkHttpClient = client): JSONObject {
         val response = try {
-            client.newCall(request).execute()
+            http.newCall(request).execute()
         } catch (e: IOException) {
             throw ResidentApiException(0, "network_error", "Can't reach GreenGate right now. Check your connection and try again.")
         }

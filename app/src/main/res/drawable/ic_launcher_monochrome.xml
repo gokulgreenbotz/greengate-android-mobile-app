@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Center the supplied gate artwork; adaptive icons keep it inside the safe zone. -->
+    <group android:pivotX="52" android:pivotY="46"
+        android:scaleX="0.64" android:scaleY="0.64"
+        android:translateX="2" android:translateY="8">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M22,86 L22,37 C22,28 26,21 34,17 L78,6 L78,22 L42,31 C38,32 36,35 36,40 L36,86 Z" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M54,86 L54,43 C54,37 57,33 63,31 L82,26 L82,86 Z" />
+    </group>
+</vector>

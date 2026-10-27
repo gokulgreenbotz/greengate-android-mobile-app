@@ -42,6 +42,7 @@ import com.greenbotz.greengate.core.session.ApiEnvironment
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
+import com.greenbotz.greengate.core.session.LoginExperience
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.screens.home.LayeredActionIcon
 import com.greenbotz.greengate.ui.screens.home.LayeredIconSetZero
@@ -197,6 +198,39 @@ fun ProfileScreen(
                             Text(title, modifier = Modifier.weight(1f), fontFamily = DMSans,
                                 color = ProfileInk, fontSize = 15.sp)
                             RadioButton(selected = AppPreferences.theme == theme, onClick = null)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text("LOGIN EXPERIENCE", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = ProfileCream,
+                shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.selectableGroup()) {
+                    LoginExperience.entries.forEachIndexed { index, experience ->
+                        if (index > 0) HorizontalDivider(color = Color(0xFFEDEAE0))
+                        val selected = AppPreferences.loginExperience == experience
+                        Row(
+                            Modifier.fillMaxWidth().selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { AppPreferences.setLoginExperience(context, experience) }
+                            ).padding(vertical = 10.dp, horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (experience == LoginExperience.NEW) "New luxury login" else "Current login",
+                                    fontFamily = DMSans, fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium, color = ProfileInk
+                                )
+                                Text(
+                                    if (experience == LoginExperience.NEW) "Navy and gold GreenGate login" else "Use the existing glass login",
+                                    fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted
+                                )
+                            }
+                            RadioButton(selected = selected, onClick = null)
                         }
                     }
                 }

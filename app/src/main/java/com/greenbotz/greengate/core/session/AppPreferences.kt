@@ -7,14 +7,25 @@ import androidx.compose.runtime.setValue
 
 enum class IconSet { ZERO, CLAY, TWO, THREE }
 enum class AppTheme { ZERO, ONE, TWO, THREE }
+enum class LoginExperience { NEW, CURRENT }
 
 private const val PREFS_NAME = "greengate_prefs"
 private const val KEY_ICON_SET = "icon_set"
 private const val KEY_ICON_SET_VERSION = "icon_set_version"
 private const val KEY_SHOW_FEEDBACK = "show_feedback"
 private const val KEY_REFERENCE_HOME_ARTWORK = "reference_home_artwork"
+private const val KEY_LOGIN_EXPERIENCE = "login_experience"
 
 object AppPreferences {
+    var loginExperience by mutableStateOf(LoginExperience.NEW)
+        private set
+
+    fun setLoginExperience(context: Context, value: LoginExperience) {
+        loginExperience = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_LOGIN_EXPERIENCE, value.name).apply()
+    }
+
     var theme by mutableStateOf(AppTheme.ZERO)
         private set
 
@@ -61,6 +72,9 @@ object AppPreferences {
         iconSet = runCatching { IconSet.valueOf(stored ?: IconSet.ZERO.name) }.getOrDefault(IconSet.ZERO)
         useReferenceArtwork = preferences.getBoolean(KEY_REFERENCE_HOME_ARTWORK, true)
         showFeedback = preferences.getBoolean(KEY_SHOW_FEEDBACK, false)
+        loginExperience = runCatching {
+            LoginExperience.valueOf(preferences.getString(KEY_LOGIN_EXPERIENCE, LoginExperience.NEW.name)!!)
+        }.getOrDefault(LoginExperience.NEW)
     }
 
     fun setIconSet(context: Context, set: IconSet) {

@@ -83,9 +83,19 @@ class GreenGateMessagingService : FirebaseMessagingService() {
     private fun handleKioskCall(data: Map<String, String>) {
         when (data["event"]) {
             // Same keys as the relay payload, so the same ringing path handles it.
-            "CALL_INITIATED" -> IncomingCallNotifier.show(this, JSONObject(data), fromPush = true)
+            "CALL_INITIATED" -> IncomingCallNotifier.show(this, callJson(data), fromPush = true)
             // Taken down here; a ringing screen already open ends by its own timeout.
             "CALL_ENDED" -> IncomingCallNotifier.cancel(this)
         }
+    }
+
+    // FCM data is flat strings: the provider credentials (twilio / vonage / livekit)
+    // arrive as JSON text and go back to objects, as on the relay.
+    private fun callJson(data: Map<String, String>): JSONObject {
+        val json = JSONObject(data)
+        for (key in listOf("twilio", "vonage", "livekit")) {
+            data[key]?.let { text -> runCatching { json.put(key, JSONObject(text)) } }
+        }
+        return json
     }
 }

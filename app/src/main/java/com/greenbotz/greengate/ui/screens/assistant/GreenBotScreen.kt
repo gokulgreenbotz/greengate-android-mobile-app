@@ -93,9 +93,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.greenbotz.greengate.core.assistant.GreenBotAction
 import com.greenbotz.greengate.core.assistant.GreenBotReply
+import com.greenbotz.greengate.core.assistant.askGreenBot
 import com.greenbotz.greengate.core.assistant.replyToGreenBot
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
+import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
 import com.greenbotz.greengate.ui.theme.DMSans
@@ -122,6 +124,16 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     var draft by rememberSaveable { mutableStateOf("") }
     var questions by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    // One entry per answered question; the action is its enum name, or "" for no button.
+    var replies by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var replyActions by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    val waitingForReply = replies.size < questions.size
+    fun replyAt(index: Int): GreenBotReply? = replies.getOrNull(index)?.let { text ->
+        GreenBotReply(text, GreenBotAction.entries.find { it.name == replyActions.getOrNull(index) })
+    }
+    // Claude answers only when the server has a key; otherwise everything works as it always did.
+    val claudeOn = ResidentSession.greenBotOnline
+    LaunchedEffect(Unit) { ResidentSession.checkGreenBot() }
     var revealedQuestions by rememberSaveable { mutableIntStateOf(questions.size) }
     var voiceMode by rememberSaveable { mutableStateOf(false) }
     var permissionError by remember { mutableStateOf<String?>(null) }
@@ -131,14 +143,25 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     val panelEntrance = remember { Animatable(0f) }
     LaunchedEffect(Unit) { panelEntrance.animateTo(1f, tween(480, easing = FastOutSlowInEasing)) }
 
+    /** Adds a question. Without Claude the built-in guide answers at once, as before. */
+    fun addQuestion(question: String, speak: Boolean) {
+        val answerNow = !ResidentSession.greenBotOnline && replies.size == questions.size
+        questions = ArrayList(questions).apply { add(question) }
+        if (!answerNow) return
+        val reply = replyToGreenBot(question)
+        replies = ArrayList(replies).apply { add(reply.text) }
+        replyActions = ArrayList(replyActions).apply { add(reply.action?.name.orEmpty()) }
+        if (speak) {
+            spokenReplyIndex = questions.lastIndex
+            pendingSpokenReply = reply.text
+        }
+    }
+
     val onRecognized by rememberUpdatedState<(String) -> Unit> { question ->
         if (voiceMode && voiceAllowed) {
             val trimmed = question.trim()
-            if (trimmed.isNotEmpty()) {
-                questions = ArrayList(questions).apply { add(trimmed) }
-                spokenReplyIndex = questions.lastIndex
-                pendingSpokenReply = replyToGreenBot(trimmed).text
-            }
+            // With Claude on, the reply is spoken when it arrives (see the reply effect below).
+            if (trimmed.isNotEmpty()) addQuestion(trimmed, speak = true)
         }
     }
     val voice = remember(context.applicationContext) {
@@ -193,6 +216,20 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
             pendingSpokenReply = null
         }
     }
+    // Answers questions in order, one at a time. A question asked meanwhile waits its turn
+    // without restarting the request in flight; a new chat cancels it; a recreated screen
+    // picks up a question left unanswered.
+    LaunchedEffect(replies.size, waitingForReply) {
+        val index = replies.size
+        if (index >= questions.size) return@LaunchedEffect
+        val reply = askGreenBot(questions.subList(0, index + 1), replies)
+        replies = ArrayList(replies).apply { add(reply.text) }
+        replyActions = ArrayList(replyActions).apply { add(reply.action?.name.orEmpty()) }
+        if (voiceMode && voiceAllowed && index == questions.lastIndex) {
+            spokenReplyIndex = index
+            pendingSpokenReply = reply.text
+        }
+    }
     LaunchedEffect(questions.size, voiceMode) {
         if (!voiceMode && questions.isNotEmpty()) listState.animateScrollToItem(questions.size)
     }
@@ -204,7 +241,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
         pendingSpokenReply = null
         permissionError = null
         voice.clearError()
-        questions = ArrayList(questions).apply { add(trimmed) }
+        addQuestion(trimmed, speak = false)
         draft = ""
     }
 
@@ -285,6 +322,8 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                     pendingSpokenReply = null
                     permissionError = null
                     questions = arrayListOf()
+                    replies = arrayListOf()
+                    replyActions = arrayListOf()
                     revealedQuestions = 0
                     draft = ""
                     spokenReplyIndex = -1
@@ -362,10 +401,12 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                                     ) {
                                         GreenBotOrb(
                                             Modifier.size(orbSize), listening = voice.isListening,
-                                            speaking = voice.isSpeaking, level = voice.level, processing = voice.isProcessing
+                                            speaking = voice.isSpeaking, level = voice.level,
+                                            processing = voice.isProcessing || (shownVoice && waitingForReply)
                                         )
                                         Spacer(Modifier.height(12.dp))
-                                        BotHeading(shownVoice, voice.isListening, voice.isProcessing, voice.isSpeaking, compactVoice)
+                                        BotHeading(shownVoice, voice.isListening, voice.isProcessing || (shownVoice && waitingForReply),
+                                            voice.isSpeaking, compactVoice, privacyNotice = claudeOn)
                                         if (shownVoice) {
                                             if (voice.partialText.isNotBlank() && (voice.isListening || voice.isProcessing)) {
                                                 Spacer(Modifier.height(20.dp))
@@ -382,11 +423,12 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                                                 }
                                             } else if (questions.isNotEmpty()) {
                                                 Spacer(Modifier.height(16.dp))
+                                                val lastReply = replyAt(questions.lastIndex)
                                                 BotVoiceReply(
-                                                    questions.last(), replyToGreenBot(questions.last()),
+                                                    questions.last(), lastReply,
                                                     ::openAction, ::copyReply,
                                                     speaking = voice.isSpeaking && spokenReplyIndex == questions.lastIndex,
-                                                    onRead = { readReply(questions.lastIndex, replyToGreenBot(questions.last()).text) }
+                                                    onRead = { lastReply?.let { readReply(questions.lastIndex, it.text) } }
                                                 )
                                             }
                                         } else if (!keyboardVisible && draft.isBlank()) {
@@ -406,11 +448,11 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                                         verticalArrangement = Arrangement.spacedBy(24.dp)
                                     ) {
                                         itemsIndexed(questions, key = { index, _ -> "question-$index" }) { index, question ->
-                                            val reply = replyToGreenBot(question)
+                                            val reply = replyAt(index)
                                             BotConversation(
                                                 question, reply, ::openAction, ::copyReply,
                                                 speaking = voice.isSpeaking && spokenReplyIndex == index,
-                                                onRead = { readReply(index, reply.text) },
+                                                onRead = { reply?.let { readReply(index, it.text) } },
                                                 announce = index == questions.lastIndex,
                                                 animateEntry = index >= revealedQuestions,
                                                 onEntryStarted = { if (index < questions.size) revealedQuestions = maxOf(revealedQuestions, index + 1) }
@@ -485,7 +527,7 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                             BotComposer(
                                 draft, onDraftChange = { if (!voiceMode) draft = it.take(500) },
                                 onSend = { if (!voiceMode) sendQuestion(draft) }, onVoice = { selectMode(true) },
-                                enabled = !voiceMode
+                                enabled = !voiceMode, privacyNotice = claudeOn
                             )
                         }
                     }
@@ -544,7 +586,9 @@ private fun BotMark(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BotHeading(voiceMode: Boolean, listening: Boolean, processing: Boolean, speaking: Boolean, compact: Boolean) {
+private fun BotHeading(
+    voiceMode: Boolean, listening: Boolean, processing: Boolean, speaking: Boolean, compact: Boolean, privacyNotice: Boolean
+) {
     val colors = MaterialTheme.colorScheme
     val title = when {
         !voiceMode -> "How can I help you?"
@@ -559,6 +603,7 @@ private fun BotHeading(voiceMode: Boolean, listening: Boolean, processing: Boole
         listening -> "Speak naturally. Tap the mic when you're done."
         processing -> "Turning your words into a reply."
         speaking -> "You can stop the reply at any time."
+        privacyNotice -> "Ask about the app. Please don't share personal details."
         else -> "Ask about your home or community."
     }
     Text(title, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -663,7 +708,7 @@ private fun BotVoiceControls(
 
 @Composable
 private fun BotVoiceReply(
-    question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit,
+    question: String, reply: GreenBotReply?, onAction: (GreenBotAction) -> Unit,
     onCopy: (String) -> Unit, speaking: Boolean, onRead: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -675,18 +720,22 @@ private fun BotVoiceReply(
             Text("YOU ASKED", fontFamily = DMSans, fontSize = 9.sp, letterSpacing = 1.sp, color = BotSecondaryText)
             Text(question, Modifier.padding(top = 6.dp, bottom = 16.dp), fontFamily = DMSans,
                 fontSize = 14.sp, lineHeight = 21.sp, color = BotSecondaryText)
-            SelectionContainer {
-                Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
+            if (reply == null) {
+                BotThinking()
+            } else {
+                SelectionContainer {
+                    Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
+                }
+                reply.action?.let { Spacer(Modifier.height(12.dp)); BotActionButton(it, onAction) }
+                BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
             }
-            reply.action?.let { Spacer(Modifier.height(12.dp)); BotActionButton(it, onAction) }
-            BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
         }
     }
 }
 
 @Composable
 private fun BotConversation(
-    question: String, reply: GreenBotReply, onAction: (GreenBotAction) -> Unit,
+    question: String, reply: GreenBotReply?, onAction: (GreenBotAction) -> Unit,
     onCopy: (String) -> Unit, speaking: Boolean, onRead: () -> Unit, announce: Boolean,
     animateEntry: Boolean, onEntryStarted: () -> Unit
 ) {
@@ -719,17 +768,26 @@ private fun BotConversation(
                     color = colors.surface.copy(alpha = .9f),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = .9f))
                 ) {
-                    Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 4.dp)) {
-                        SelectionContainer {
-                            Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
+                    Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = if (reply == null) 18.dp else 4.dp)) {
+                        if (reply == null) {
+                            BotThinking()
+                        } else {
+                            SelectionContainer {
+                                Text(reply.text, fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = colors.onSurface)
+                            }
+                            reply.action?.let { Spacer(Modifier.height(14.dp)); BotActionButton(it, onAction) }
+                            BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
                         }
-                        reply.action?.let { Spacer(Modifier.height(14.dp)); BotActionButton(it, onAction) }
-                        BotReplyTools(speaking, onCopy = { onCopy(reply.text) }, onRead = onRead)
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun BotThinking() {
+    Text("Thinking...", fontFamily = DMSans, fontSize = 15.sp, lineHeight = 24.sp, color = BotSecondaryText)
 }
 
 @Composable
@@ -796,7 +854,8 @@ private fun BotActionButton(action: GreenBotAction, onAction: (GreenBotAction) -
 
 @Composable
 private fun BotComposer(
-    draft: String, onDraftChange: (String) -> Unit, onSend: () -> Unit, onVoice: () -> Unit, enabled: Boolean
+    draft: String, onDraftChange: (String) -> Unit, onSend: () -> Unit, onVoice: () -> Unit, enabled: Boolean,
+    privacyNotice: Boolean
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -847,7 +906,8 @@ private fun BotComposer(
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Your guide to GreenGate", fontFamily = DMSans, fontSize = 10.sp, color = BotSecondaryText)
+            Text(if (privacyNotice) "Please don't share personal details" else "Your guide to GreenGate",
+                fontFamily = DMSans, fontSize = 10.sp, color = BotSecondaryText)
             if (draft.length >= 400) {
                 Text(draft.length.toString() + "/500", fontFamily = DMSans, fontSize = 10.sp,
                     color = if (draft.length == 500) colors.error else BotSecondaryText)

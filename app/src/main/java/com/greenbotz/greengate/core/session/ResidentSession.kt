@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val AUTH_REQUIRED = "resident_app_auth_required"
@@ -118,6 +119,12 @@ object ResidentSession {
     }
 
     /**
+     * True when kiosk calls travel over the shared signal relay (Production). On Stage
+     * and Local they use the onboarding backend (WebSocket / FCM), so nothing polls the relay.
+     */
+    val usesCallRelay: Boolean get() = environment == ApiEnvironment.PROD
+
+    /**
      * WebSocket URL for kiosk calls on the onboarding backend, or null when there is
      * nothing to listen to: not signed in, or on Production, whose calls come from
      * com-core-service.
@@ -139,6 +146,23 @@ object ResidentSession {
             null
         }
     }
+
+    private var greenBotEnabled by mutableStateOf(false)
+
+    /** True only while signed in to a server that answers Green Bot with Claude (see [checkGreenBot]). */
+    val greenBotOnline: Boolean get() = greenBotEnabled && state is State.SignedIn
+
+    /** Asks the server whether Green Bot chat is on. Anything but a clear yes keeps the built-in help. */
+    suspend fun checkGreenBot() {
+        greenBotEnabled = state is State.SignedIn && try {
+            authorized { api.greenBotEnabled(it) }
+        } catch (_: ResidentApiException) {
+            false
+        }
+    }
+
+    /** Green Bot reply (`{ reply, action }`) for a signed-in resident. Throws [ResidentApiException]. */
+    suspend fun askGreenBot(messages: JSONArray): JSONObject = authorized { api.askGreenBot(it, messages) }
 
     /** Asks for an SMS code. [phone] includes the country code. Returns seconds until "Resend" is allowed. */
     suspend fun sendCode(phone: String): Int = io { api.sendCode(phone) }

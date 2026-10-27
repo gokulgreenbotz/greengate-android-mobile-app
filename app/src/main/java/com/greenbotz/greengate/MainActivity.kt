@@ -19,8 +19,11 @@ import com.greenbotz.greengate.core.call.provider.SharedCallConfig
 import com.greenbotz.greengate.core.push.CallSignalingService
 import com.greenbotz.greengate.core.push.IncomingCallNotifier
 import com.greenbotz.greengate.core.session.ResidentSession
+import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.ui.navigation.MainScreen
 import com.greenbotz.greengate.ui.screens.auth.LoginScreen
+import com.greenbotz.greengate.ui.screens.auth.IntroVideoScreen
+import com.greenbotz.greengate.ui.screens.auth.LuxuryLoginScreen
 import com.greenbotz.greengate.ui.screens.auth.SplashScreen
 import com.greenbotz.greengate.ui.theme.GreenGateTheme
 import kotlinx.coroutines.launch
@@ -42,9 +45,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             GreenGateTheme {
                 var showSplash by remember { mutableStateOf(true) }
+                var showLoginPromo by remember { mutableStateOf(true) }
                 val session = ResidentSession.state
                 val scope = rememberCoroutineScope()
                 LaunchedEffect(Unit) { ResidentSession.restore() }
+                // Needed for a call to open the call screen by itself when the app is closed.
+                LaunchedEffect(session is ResidentSession.State.SignedIn) {
+                    if (session is ResidentSession.State.SignedIn) {
+                        IncomingCallNotifier.promptForMissingPermissions(this@MainActivity)
+                    }
+                }
                 if (showSplash) {
                     SplashScreen(
                         onFinished = { showSplash = false },
@@ -53,11 +63,23 @@ class MainActivity : ComponentActivity() {
                 } else if (session is ResidentSession.State.SignedIn || session == ResidentSession.State.Demo) {
                     MainScreen(
                         controller = callController,
-                        onLogout = { scope.launch { ResidentSession.signOut() } },
-                        onSwitchServer = { server -> scope.launch { ResidentSession.switchEnvironment(server) } }
+                        onLogout = {
+                            showLoginPromo = true
+                            scope.launch { ResidentSession.signOut() }
+                        },
+                        onSwitchServer = { server ->
+                            showLoginPromo = true
+                            scope.launch { ResidentSession.switchEnvironment(server) }
+                        }
                     )
                 } else {
-                    LoginScreen()
+                    if (showLoginPromo) {
+                        IntroVideoScreen(onFinished = { showLoginPromo = false })
+                    } else if (AppPreferences.loginExperience == com.greenbotz.greengate.core.session.LoginExperience.NEW) {
+                        LuxuryLoginScreen()
+                    } else {
+                        LoginScreen()
+                    }
                 }
             }
         }

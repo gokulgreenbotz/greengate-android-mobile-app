@@ -34,6 +34,30 @@ object IncomingCallNotifier {
     @Volatile
     var appInForeground: Boolean = false
 
+    private var permissionPromptShown = false
+
+    /**
+     * A call that arrives while the app is closed can only open the call screen by
+     * itself with "Display over other apps" (and, from Android 14, "Full-screen
+     * notifications"). Without them Android shows only a heads-up notification.
+     * Sends the user to the first missing setting, once per app start.
+     */
+    fun promptForMissingPermissions(activity: android.app.Activity) {
+        if (permissionPromptShown) return
+        val packageUri = android.net.Uri.parse("package:${activity.packageName}")
+        val intent = when {
+            !android.provider.Settings.canDrawOverlays(activity) ->
+                Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri)
+            Build.VERSION.SDK_INT >= 34 &&
+                !activity.getSystemService(NotificationManager::class.java).canUseFullScreenIntent() ->
+                Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, packageUri)
+            else -> return
+        }
+        permissionPromptShown = true
+        runCatching { activity.startActivity(intent) }
+            .onFailure { Log.w("IncomingCallNotifier", "could not open call permission settings", it) }
+    }
+
     fun cancel(context: Context) {
         runCatching {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
