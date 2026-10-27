@@ -107,7 +107,18 @@ class MainActivity : ComponentActivity() {
         val kioskName = intent.getStringExtra(CallSignalingService.EXTRA_KIOSK_NAME) ?: "Main Gate Kiosk"
         val providerStr = intent.getStringExtra(CallSignalingService.EXTRA_PROVIDER) ?: "twilio"
 
-        val creds = if (providerStr.equals("vonage", ignoreCase = true)) {
+        val creds = if (providerStr.equals("livekit", ignoreCase = true)) {
+            com.greenbotz.greengate.core.call.provider.livekit.LiveKitConfig.receiverCredentials(
+                context = applicationContext,
+                callId = callId,
+                visitorName = visitorName,
+                unitName = unitName,
+                kioskName = kioskName,
+                url = intent.getStringExtra(CallSignalingService.EXTRA_LIVEKIT_URL),
+                roomName = intent.getStringExtra(CallSignalingService.EXTRA_LIVEKIT_ROOM),
+                tokenFromSignal = intent.getStringExtra(CallSignalingService.EXTRA_LIVEKIT_TOKEN)
+            )
+        } else if (providerStr.equals("vonage", ignoreCase = true)) {
             val apiKey = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_API_KEY).takeUnless { it.isNullOrBlank() }
                 ?: SharedCallConfig.vonageApiKey
             val sessionId = intent.getStringExtra(CallSignalingService.EXTRA_VONAGE_SESSION_ID).takeUnless { it.isNullOrBlank() }

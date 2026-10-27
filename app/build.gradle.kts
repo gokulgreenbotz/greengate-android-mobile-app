@@ -58,6 +58,8 @@ dependencies {
     // Multi-Provider Video Calling dependencies
     implementation("com.twilio:video-android:7.10.4")
     implementation("com.vonage:client-sdk-video:2.30.1")
+    // LiveKit Cloud (third provider; own prefixed WebRTC, no clash with Twilio/Vonage)
+    implementation("io.livekit:livekit-android:2.28.2")
 
     // Real-time Call Signaling dependencies
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

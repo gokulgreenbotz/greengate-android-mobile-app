@@ -54,7 +54,22 @@ class ReceiverCallController(
     /** Calls the resident chose to skip: never ring for these again. */
     private val skippedCallIds = LinkedHashSet<String>()
 
+    /**
+     * May be called from the relay polling thread. Everything runs on the main
+     * thread: tearing down an old session (LiveKit views / Room) or starting a
+     * preview from a background thread races the SDK's main-thread callbacks.
+     */
     fun triggerIncomingCall(credentials: ReceiverCallCredentials, ringTimeoutMs: Long = 50_000L) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            triggerIncomingCallOnMain(credentials, ringTimeoutMs)
+        } else {
+            mainHandler.post { triggerIncomingCallOnMain(credentials, ringTimeoutMs) }
+        }
+    }
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private fun triggerIncomingCallOnMain(credentials: ReceiverCallCredentials, ringTimeoutMs: Long) {
         if (credentials.callId in skippedCallIds) {
             Log.i("ReceiverCallController", "Ignoring skipped call ${credentials.callId}")
             return
@@ -80,6 +95,82 @@ class ReceiverCallController(
                 declineCall(EndReason.RING_TIMEOUT)
             }
         }
+
+        startPreview(credentials)
+    }
+
+    // ------------------------------------------------- ringing-time preview
+
+    /** Session that joined while ringing (LiveKit); answerCall() reuses it. */
+    private var previewSession: ReceiverCallSession? = null
+    private var previewCallId: String? = null
+    private var previewJob: Job? = null
+
+    /**
+     * "Instant answer": for providers that support it, join the call right
+     * now — subscribe-only, nothing published — so the ringing screen shows
+     * the visitor live and Answer only has to switch the mic/camera on.
+     * May be called from the signaling thread; all work hops to main.
+     */
+    private fun startPreview(credentials: ReceiverCallCredentials) {
+        scope.launch {
+            if (activeCredentials?.callId != credentials.callId ||
+                _state.value !is ReceiverCallState.Incoming
+            ) return@launch
+            if (previewCallId == credentials.callId) return@launch
+
+            val session = runCatching { ReceiverCallSessionFactory.create(appContext, credentials) }
+                .getOrNull() ?: return@launch
+            if (!session.supportsPreview) {
+                // Twilio / Vonage: nothing to pre-join; answerCall() connects as before.
+                return@launch
+            }
+            previewSession = session
+            previewCallId = credentials.callId
+            activeSession = session
+
+            previewJob = scope.launch {
+                // Visitor video for the ringing screen.
+                launch { session.remoteView.collect { v -> _remoteView.value = v } }
+                // Kiosk says another phone answered (instant path, over the call).
+                launch {
+                    session.appMessages.collect { raw ->
+                        val msg = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return@collect
+                        if (msg.optString("type") == "ANSWERED") {
+                            onAnsweredElsewhere(credentials.callId, msg.optString("by"))
+                        }
+                    }
+                }
+                // Kiosk left / gave up while we were still ringing → stop ringing.
+                launch {
+                    session.state.first { it is ReceiverCallState.Ended }
+                    val ended = session.state.value as ReceiverCallState.Ended
+                    if (_state.value is ReceiverCallState.Incoming && previewSession === session) {
+                        if (ended.reason == EndReason.REMOTE_HANGUP) {
+                            Log.i("ReceiverCallController", "Kiosk left during ringing — ending")
+                            endedByKiosk()
+                        } else {
+                            // Preview join failed (network, token…): keep ringing;
+                            // Answer will connect from scratch.
+                            Log.w("ReceiverCallController", "Preview failed (${ended.cause}) — will connect on answer")
+                            dropPreview()
+                        }
+                    }
+                }
+            }
+            session.startPreview()
+            Log.i("ReceiverCallController", "Preview join started for call ${credentials.callId}")
+        }
+    }
+
+    /** Forget the preview session (does not tear it down). */
+    private fun dropPreview() {
+        previewJob?.cancel()
+        previewJob = null
+        if (activeSession === previewSession) activeSession = null
+        previewSession = null
+        previewCallId = null
+        _remoteView.value = null
     }
 
     fun answerCall() {
@@ -94,10 +185,18 @@ class ReceiverCallController(
         onCallAnswered?.invoke(creds.callId)
         _state.value = ReceiverCallState.Connecting
 
+        // Reuse the ringing-time preview connection if there is one: Answer
+        // then only turns the mic/camera on (LiveKit "instant answer").
+        val preview = previewSession?.takeIf { previewCallId == creds.callId }
+        previewJob?.cancel()
+        previewJob = null
+        previewSession = null
+        previewCallId = null
+
         callJob = scope.launch {
             audioController.activate()
             try {
-                val session = ReceiverCallSessionFactory.create(appContext, creds)
+                val session = preview ?: ReceiverCallSessionFactory.create(appContext, creds)
                 activeSession = session
 
                 val stateJob = launch {
@@ -133,6 +232,20 @@ class ReceiverCallController(
                         endedByKiosk()
                     }
                 }
+                // First answer wins (all providers): tell the kiosk which phone
+                // this is. If another phone got there first, the kiosk answers
+                // ANSWERED(by=other) and onAnsweredElsewhere() leaves quietly.
+                val claimJob = launch {
+                    session.state.first { it is ReceiverCallState.Connected }
+                    val claim = org.json.JSONObject()
+                        .put("type", "CLAIM")
+                        .put("device", com.greenbotz.greengate.core.call.provider.livekit.LiveKitConfig.residentIdentity(appContext))
+                        .toString()
+                    for (wait in longArrayOf(300L, 1200L, 2500L)) {
+                        delay(wait)
+                        session.sendAppMessage(claim)
+                    }
+                }
                 // Once the kiosk is on, tell it our mic/camera state (QA #2).
                 val mediaStateJob = launch {
                     session.remoteView.first { it != null }
@@ -144,6 +257,7 @@ class ReceiverCallController(
                 session.state.first { it.isTerminal }
 
                 stateJob.cancel()
+                claimJob.cancel()
                 kioskWatchdog.cancel()
                 mediaStateJob.cancel()
                 viewJob.cancel()
@@ -279,6 +393,7 @@ class ReceiverCallController(
                 requestId = msg.optString("id").ifBlank { null }
             )
             "HANGUP" -> endedByKiosk()
+            "ANSWERED" -> activeCredentials?.callId?.let { onAnsweredElsewhere(it, msg.optString("by")) }
         }
     }
 
@@ -291,6 +406,40 @@ class ReceiverCallController(
         scope.launch {
             if (activeCredentials?.callId != callId) return@launch
             endedByKiosk()
+        }
+    }
+
+    /**
+     * First answer wins. The kiosk reports that a phone answered [callId]
+     * ([answeredBy] = that phone's LiveKit identity, may be blank).
+     *  - Still ringing here → stop ringing and hide the incoming screen,
+     *    WITHOUT telling the kiosk anything (no decline).
+     *  - We also pressed Answer at the same moment but the other phone won
+     *    (LiveKit only) → leave quietly, again without a hang-up message.
+     * Called from any thread; safe to call twice (relay + in-call message).
+     */
+    fun onAnsweredElsewhere(callId: String, answeredBy: String) {
+        scope.launch {
+            val creds = activeCredentials ?: return@launch
+            if (creds.callId != callId) return@launch
+            val me = runCatching {
+                com.greenbotz.greengate.core.call.provider.livekit.LiveKitConfig.residentIdentity(appContext)
+            }.getOrNull()
+            val s = _state.value
+            when {
+                s is ReceiverCallState.Incoming -> {
+                    Log.i("ReceiverCallController", "Call $callId answered on another phone ($answeredBy) — stop ringing")
+                    skippedCallIds.add(callId)
+                    cleanup() // disconnects the preview, removes the notification
+                    _state.value = ReceiverCallState.Idle
+                }
+                answeredBy.isNotBlank() && me != null && answeredBy != me && !s.isTerminal -> {
+                    Log.i("ReceiverCallController", "Call $callId taken by $answeredBy (we are $me) — leaving quietly")
+                    skippedCallIds.add(callId)
+                    cleanup()
+                    _state.value = ReceiverCallState.Idle
+                }
+            }
         }
     }
 
@@ -393,6 +542,13 @@ class ReceiverCallController(
         // call (or resetToIdle) just dropped the reference, leaving the old
         // Twilio/Vonage connection — mic and all — alive in the room.
         activeSession?.let { s -> runCatching { s.disconnect(EndReason.LOCAL_HANGUP) } }
+        // A ringing-time preview connection must never outlive the ringing.
+        previewSession?.takeIf { it !== activeSession }
+            ?.let { s -> runCatching { s.disconnect(EndReason.LOCAL_HANGUP) } }
+        previewJob?.cancel()
+        previewJob = null
+        previewSession = null
+        previewCallId = null
         callJob?.cancel()
         audioController.deactivate()
         activeSession = null

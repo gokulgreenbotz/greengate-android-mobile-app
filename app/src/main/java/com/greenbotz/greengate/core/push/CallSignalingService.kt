@@ -57,6 +57,9 @@ class CallSignalingService : Service() {
         const val EXTRA_VONAGE_API_KEY = "extra_vonage_api_key"
         const val EXTRA_VONAGE_SESSION_ID = "extra_vonage_session_id"
         const val EXTRA_VONAGE_TOKEN = "extra_vonage_token"
+        const val EXTRA_LIVEKIT_URL = "extra_livekit_url"
+        const val EXTRA_LIVEKIT_ROOM = "extra_livekit_room"
+        const val EXTRA_LIVEKIT_TOKEN = "extra_livekit_token"
 
         fun startService(context: Context) {
             val intent = Intent(context, CallSignalingService::class.java)
@@ -201,7 +204,10 @@ class CallSignalingService : Service() {
                 // call that was already on the relay before we started).
                 // Kiosk cancelled / call ended while we were ringing in the
                 // background: take the incoming-call notification down.
-                if (event == "CALL_ENDED" && callId.isNotBlank() && callId == lastProcessedCallId) {
+                // Same when another family phone answered: stop ringing here.
+                if ((event == "CALL_ENDED" || event == "CALL_ANSWERED") &&
+                    callId.isNotBlank() && callId == lastProcessedCallId
+                ) {
                     IncomingCallNotifier.cancel(this)
                 }
 
@@ -216,6 +222,7 @@ class CallSignalingService : Service() {
                         return
                     }
                     lastProcessedCallId = callId
+                    RingReceipt.send(this, callId)
                     lastProcessedTimestamp = timestamp
                     Log.i(
                         "CallSignalingService",

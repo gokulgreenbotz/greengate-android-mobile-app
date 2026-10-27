@@ -99,7 +99,11 @@ class VonageReceiverSession(
                     _state.value = ReceiverCallState.Connected(System.currentTimeMillis())
 
                     try {
-                        publisher = Publisher.Builder(context).build().apply {
+                        // Stream name = device id: the kiosk uses it to tell which
+                        // family phone answered ("first answer wins").
+                        publisher = Publisher.Builder(context)
+                            .name(com.greenbotz.greengate.core.call.provider.livekit.LiveKitConfig.residentIdentity(context))
+                            .build().apply {
                             setPublisherListener(object : PublisherKit.PublisherListener {
                                 override fun onStreamCreated(p: PublisherKit, s: Stream) {}
                                 override fun onStreamDestroyed(p: PublisherKit, s: Stream) {}

@@ -89,6 +89,11 @@ object IncomingCallNotifier {
                 putExtra(CallSignalingService.EXTRA_VONAGE_API_KEY, vonageApiKey)
                 putExtra(CallSignalingService.EXTRA_VONAGE_SESSION_ID, vonageSessionId)
                 putExtra(CallSignalingService.EXTRA_VONAGE_TOKEN, vonageToken)
+                json.optJSONObject("livekit")?.let { lk ->
+                    putExtra(CallSignalingService.EXTRA_LIVEKIT_URL, lk.optString("url"))
+                    putExtra(CallSignalingService.EXTRA_LIVEKIT_ROOM, lk.optString("roomName"))
+                    putExtra(CallSignalingService.EXTRA_LIVEKIT_TOKEN, lk.optString("token"))
+                }
             }
 
             if (appInForeground) {

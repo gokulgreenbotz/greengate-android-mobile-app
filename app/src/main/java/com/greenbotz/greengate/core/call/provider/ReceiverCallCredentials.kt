@@ -29,4 +29,19 @@ sealed interface ReceiverCallCredentials {
     ) : ReceiverCallCredentials {
         override val provider: CallProvider = CallProvider.VONAGE
     }
+
+    /** LiveKit Cloud. [token] is minted per phone (unique identity per device). */
+    data class LiveKit(
+        override val callId: String,
+        override val visitorName: String,
+        override val unitName: String,
+        override val kioskName: String,
+        val serverUrl: String,
+        val roomName: String,
+        val token: String
+    ) : ReceiverCallCredentials {
+        override val provider: CallProvider = CallProvider.LIVEKIT
+        override fun toString() =
+            "LiveKit(callId=$callId, url=$serverUrl, room=$roomName, token=<${token.length} chars>)"
+    }
 }

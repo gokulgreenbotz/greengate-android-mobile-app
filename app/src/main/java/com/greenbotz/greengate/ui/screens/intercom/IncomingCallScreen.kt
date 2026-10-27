@@ -43,6 +43,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
+import android.view.View
+import android.view.ViewGroup
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.viewinterop.AndroidView
 
 @Composable
 fun IncomingCallScreen(
@@ -50,7 +55,12 @@ fun IncomingCallScreen(
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     /** Hide this screen without answering or declining (kiosk keeps ringing). */
-    onSkip: () -> Unit = {}
+    onSkip: () -> Unit = {},
+    /**
+     * Live kiosk video while still ringing (LiveKit pre-connect). Null for
+     * providers without preview, or until the kiosk's video arrives.
+     */
+    previewView: View? = null
 ) {
     val context = LocalContext.current
     var confirmSkip by remember { mutableStateOf(false) }
@@ -97,6 +107,32 @@ fun IncomingCallScreen(
             .background(Color(0xFF1B2A1E)),
         contentAlignment = Alignment.Center
     ) {
+        // See who is at the gate before answering (LiveKit pre-connect).
+        if (previewView != null) {
+            key(previewView) {
+                AndroidView(
+                    factory = {
+                        (previewView.parent as? ViewGroup)?.removeView(previewView)
+                        previewView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // Keep the text and buttons readable over the video.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.65f),
+                            0.35f to Color.Transparent,
+                            0.65f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.75f)
+                        )
+                    )
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
@@ -139,19 +175,23 @@ fun IncomingCallScreen(
                 )
             }
 
-            // Big Avatar Icon
-            Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .background(Color.White.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Person,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(80.dp)
-                )
+            // Big Avatar Icon (only when there is no live preview to show)
+            if (previewView == null) {
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Person,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.height(1.dp))
             }
 
             // Action Buttons

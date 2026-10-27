@@ -318,7 +318,9 @@ fun MainScreen(
                     credentials = state.credentials,
                     onAccept = { activeController.answerCall() },
                     onDecline = { activeController.declineCall() },
-                    onSkip = { activeController.skipCall() }
+                    onSkip = { activeController.skipCall() },
+                    // LiveKit: the visitor's live video while still ringing.
+                    previewView = remoteView
                 )
             }
 

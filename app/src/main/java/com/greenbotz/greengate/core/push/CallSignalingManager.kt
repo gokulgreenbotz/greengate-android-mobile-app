@@ -6,6 +6,7 @@ import com.greenbotz.greengate.core.call.ReceiverCallController
 import com.greenbotz.greengate.core.call.provider.CallProvider
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
 import com.greenbotz.greengate.core.call.provider.SharedCallConfig
+import com.greenbotz.greengate.core.call.provider.livekit.LiveKitConfig
 import com.greenbotz.greengate.core.session.ResidentSession
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -193,6 +194,11 @@ class CallSignalingManager(
                         Log.i("CallSignalingManager", "HTTPS SIGNAL RECEIVED: INCOMING CALL from Kiosk! callId=$callId " +
                             "age(kioskClock->phoneClock)=${now - timestamp}ms")
                         handleIncomingCall(json)
+                    } else if (event == "CALL_ANSWERED" && callId.isNotBlank() &&
+                        callId == controller.currentCredentials?.callId
+                    ) {
+                        // First answer wins: another family phone took the call.
+                        controller.onAnsweredElsewhere(callId, json.optString("answeredBy"))
                     } else if ((event == "DOOR_UNLOCKED" || event == "DOOR_UNLOCK_FAILED") &&
                         callId == controller.currentCredentials?.callId &&
                         json.optString("requestId") != lastDoorResultRequestId
@@ -222,6 +228,8 @@ class CallSignalingManager(
     private fun handleIncomingCall(json: JSONObject) {
         try {
             val callId = json.optString("callId", "call-${System.currentTimeMillis()}")
+            // Let the kiosk know at least one phone of the unit is reachable.
+            RingReceipt.send(context, callId)
             val providerStr = json.optString("provider", "twilio")
             val provider = CallProvider.fromString(providerStr)
             val visitorName = json.optString("visitorName", "Visitor at Kiosk")
@@ -263,6 +271,20 @@ class CallSignalingManager(
                         apiKey = apiKey,
                         sessionId = sessionId,
                         token = token
+                    )
+                }
+
+                CallProvider.LIVEKIT -> {
+                    val lk = json.optJSONObject("livekit")
+                    LiveKitConfig.receiverCredentials(
+                        context = context,
+                        callId = callId,
+                        visitorName = visitorName,
+                        unitName = unitName,
+                        kioskName = kioskName,
+                        url = lk?.optString("url"),
+                        roomName = lk?.optString("roomName"),
+                        tokenFromSignal = lk?.optString("token")
                     )
                 }
             }

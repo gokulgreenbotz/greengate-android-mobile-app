@@ -16,6 +16,13 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // LiveKit SDK pulls its audio-routing helper (audioswitch) from JitPack.
+        maven {
+            url = uri("https://jitpack.io")
+            content {
+                includeGroup("com.github.davidliu")
+            }
+        }
     }
 }
 

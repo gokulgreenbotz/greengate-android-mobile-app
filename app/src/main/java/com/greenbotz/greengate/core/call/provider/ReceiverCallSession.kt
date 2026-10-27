@@ -26,6 +26,24 @@ interface ReceiverCallSession {
     /** Sends a JSON message to the kiosk over the call. False if not connected. */
     fun sendAppMessage(message: String): Boolean
 
+    /**
+     * True if this provider can join the call while the phone is still
+     * RINGING — subscribe-only, nothing published — so the ringing screen can
+     * show the visitor live and Answer only has to switch the mic/camera on.
+     */
+    val supportsPreview: Boolean get() = false
+
+    /**
+     * Starts the ringing-time preview join (see [supportsPreview]). Returns
+     * immediately; the kiosk video appears on [remoteView] when it arrives.
+     * [connect] later reuses this connection. No-op for providers without it.
+     */
+    fun startPreview() {}
+
+    /**
+     * Joins the call and publishes mic + camera. If [startPreview] already
+     * joined, this only publishes — that is the near-instant answer.
+     */
     suspend fun connect()
     fun createLocalView(context: Context): View?
 
