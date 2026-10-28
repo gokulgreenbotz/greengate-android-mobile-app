@@ -158,6 +158,9 @@ object ResidentSession {
         registerPush()
     }
 
+    /** A new gate pass for the intercom. Throws [ResidentApiException]. */
+    suspend fun accessQr(): AccessQr = authorized(api::accessQr)
+
     fun startDemo() {
         state = State.Demo
     }

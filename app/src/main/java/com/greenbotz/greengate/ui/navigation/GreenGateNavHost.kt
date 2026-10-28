@@ -1,5 +1,6 @@
 package com.greenbotz.greengate.ui.navigation
 
+import com.greenbotz.greengate.ui.screens.access.MyQrScreen
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
@@ -191,7 +192,7 @@ fun MainScreen(
                     )
                 }
                 screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
-                screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
+                screen(Screen.Access.route) { MyQrScreen(onCallTest = { navController.navigate(Screen.CallTest.route) }) }
                 screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
                 screen(Screen.Profile.route) { ProfileScreen(navController, onLogout) }
                 screen(Screen.BookFacility.route, underStatusBar = { true }) {

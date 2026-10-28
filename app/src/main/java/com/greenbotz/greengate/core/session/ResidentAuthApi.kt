@@ -1,6 +1,9 @@
 package com.greenbotz.greengate.core.session
 
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -21,6 +24,9 @@ data class Household(val spaceId: String, val spacePath: String, val role: Strin
 
 /** The signed-in resident: their name, the property of the session and their units there. */
 data class Me(val name: String, val property: PropertyChoice, val households: List<Household>)
+
+/** A gate pass to show at an intercom; [expiresAtMillis] is the server's expiry. */
+data class AccessQr(val value: String, val expiresAtMillis: Long)
 
 /** Result of asking for a code: sent for one property, or the phone is in several and one must be chosen. */
 sealed interface SendResult {
@@ -92,6 +98,12 @@ internal class ResidentAuthApi(apiUrl: String) {
         execute(request("/auth/logout", accessToken).post(EmptyJson).build())
     }
 
+    /** A new gate pass for the signed-in resident: valid 30 seconds, opens one gate once. */
+    fun accessQr(accessToken: String): AccessQr {
+        val data = execute(request("/access-qr", accessToken).post(EmptyJson).build())
+        return AccessQr(data.getString("qr"), parseInstant(data.getString("expires_at")))
+    }
+
     /** Registers this device's FCM token on the signed-in session, so calls and notices reach it. */
     fun registerFcmToken(accessToken: String, fcmToken: String) {
         val body = JSONObject().put("fcm_token", fcmToken).put("voip_token", "").put("platform", "android")
@@ -142,6 +154,14 @@ internal class ResidentAuthApi(apiUrl: String) {
     }
 
     private fun tokens(data: JSONObject) = Tokens(data.getString("access_token"), data.getString("refresh_token"))
+
+    // RFC 3339 in UTC ("2026-10-28T09:00:30.5Z"); java.time needs API 26.
+    private fun parseInstant(text: String): Long {
+        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        val whole = format.parse(text.take(19))?.time ?: throw ResidentApiException(0, "bad_response", "Something went wrong. Please try again.")
+        val fraction = Regex("""\.(\d{1,3})""").find(text)?.groupValues?.get(1)?.padEnd(3, '0')?.toLong() ?: 0
+        return whole + fraction
+    }
 
     private fun property(row: JSONObject) = PropertyChoice(id = row.text("id"), name = row.text("name"))
 

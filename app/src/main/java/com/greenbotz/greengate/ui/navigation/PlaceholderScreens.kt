@@ -28,11 +28,6 @@ fun PlaceholderScreen(title: String, navController: NavController) {
             ) {
                 Text("Go Back")
             }
-            if (title == "Access") {
-                TextButton(onClick = { navController.navigate(Screen.CallTest.route) }) {
-                    Text("Call Receiver Test Harness")
-                }
-            }
         }
     }
 }

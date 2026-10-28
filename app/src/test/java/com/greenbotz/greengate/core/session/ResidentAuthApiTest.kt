@@ -103,4 +103,14 @@ class ResidentAuthApiTest {
         assertEquals("", body.getString("voip_token"))
         assertEquals("android", body.getString("platform"))
     }
+
+    @Test fun accessQrReadsValueAndExpiry() {
+        answer(200, """{"status":"success","data":{"qr":"GG1.abc","expires_at":"2026-10-28T09:00:30.25Z"}}""")
+        val qr = api.accessQr("access")
+        assertEquals("GG1.abc", qr.value)
+        assertEquals(1793178030250L, qr.expiresAtMillis)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/v1/resident/access-qr", request.path)
+    }
 }
