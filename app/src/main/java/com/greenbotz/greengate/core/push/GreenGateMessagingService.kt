@@ -30,7 +30,8 @@ private const val CHANNEL_ID = "announcements"
 /** This install's FCM token, or null while Firebase can't supply one (offline, no Play services). */
 suspend fun currentPushToken(): String? = suspendCancellableCoroutine { continuation ->
     FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-        if (continuation.isActive) continuation.resume(task.result?.takeIf { task.isSuccessful })
+        // task.result throws on a failed task, so it is read only on success.
+        if (continuation.isActive) continuation.resume(if (task.isSuccessful) task.result else null)
     }
 }
 
