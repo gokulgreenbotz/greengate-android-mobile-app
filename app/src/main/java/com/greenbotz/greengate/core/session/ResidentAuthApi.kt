@@ -98,7 +98,7 @@ internal class ResidentAuthApi(apiUrl: String) {
         execute(request("/auth/logout", accessToken).post(EmptyJson).build())
     }
 
-    /** A new gate pass for the signed-in resident: valid 30 seconds, opens one gate once. */
+    /** A new gate pass for the signed-in resident: valid 10 seconds, opens one gate once. */
     fun accessQr(accessToken: String): AccessQr {
         val data = execute(request("/access-qr", accessToken).post(EmptyJson).build())
         return AccessQr(data.getString("qr"), parseInstant(data.getString("expires_at")))

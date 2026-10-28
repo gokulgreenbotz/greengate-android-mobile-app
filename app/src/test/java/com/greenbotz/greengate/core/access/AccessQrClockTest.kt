@@ -7,11 +7,11 @@ import org.junit.Test
 class AccessQrClockTest {
     private val qr = AccessQr("GG1.x", expiresAtMillis = 100_000)
 
-    @Test fun refreshesFiveSecondsEarly() = assertEquals(95_000, AccessQrClock.refreshAt(qr))
+    @Test fun refreshesOneSecondEarly() = assertEquals(99_000, AccessQrClock.refreshAt(qr))
 
     @Test fun secondsLeftRoundsUp() {
-        assertEquals(30, AccessQrClock.secondsLeft(qr, 70_000))
-        assertEquals(30, AccessQrClock.secondsLeft(qr, 70_001))
+        assertEquals(10, AccessQrClock.secondsLeft(qr, 90_000))
+        assertEquals(10, AccessQrClock.secondsLeft(qr, 90_001))
         assertEquals(1, AccessQrClock.secondsLeft(qr, 99_999))
     }
 

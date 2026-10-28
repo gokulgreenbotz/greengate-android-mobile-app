@@ -65,7 +65,7 @@ private val Backdrop = Color(0xFFF3EFE6)
 
 /**
  * The resident's gate pass: a QR the intercom checks with the Backend. Each pass
- * lives 30 seconds and opens one gate once, so a new one is fetched shortly before
+ * lives 10 seconds and opens one gate once, so a new one is fetched shortly before
  * it expires and whenever the screen comes back. Screen brightness is raised while
  * it shows, so the intercom's camera reads it easily.
  */
