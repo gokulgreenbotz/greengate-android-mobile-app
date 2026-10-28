@@ -14,13 +14,14 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val AUTH_REQUIRED = "resident_app_auth_required"
+/** A 401: the access token expired, or (from a refresh) the session is over. */
+private val ResidentApiException.unauthorized get() = status == 401
 
 /** Errors after which the session is over and the resident has to sign in again. */
-private val SessionEndedCodes = setOf(AUTH_REQUIRED, "invalid_refresh_token", "app_access_unavailable")
+private val ResidentApiException.sessionEnded get() = unauthorized || code == "RESIDENT_NOT_FOUND"
 
 /**
- * The resident's sign-in: SMS code against the onboarding service's resident app API.
+ * The resident's sign-in: SMS code against the GreenGate Backend's resident app API.
  * Call [init] before use. Functions are main-safe; [state] changes on the caller's thread.
  */
 object ResidentSession {
@@ -28,8 +29,8 @@ object ResidentSession {
         /** Checking a saved sign-in at launch. */
         data object Restoring : State
         data object SignedOut : State
-        /** [households] is empty when the app started offline; it fills on the next launch. */
-        data class SignedIn(val households: List<Household>) : State
+        /** [me] is null when the app started offline; it fills on the next launch. */
+        data class SignedIn(val me: Me?) : State
         /** The built-in demo account: app screens only, no server session, not kept across launches. */
         data object Demo : State
     }
@@ -40,34 +41,27 @@ object ResidentSession {
     /** First name shown in greetings: the signed-in resident's, "Alex" for the demo account. */
     val firstName: String
         get() = when (val s = state) {
-            is State.SignedIn -> s.households.firstOrNull()?.name?.split(' ')
+            is State.SignedIn -> s.me?.name?.split(' ')
                 ?.firstOrNull { it.isNotBlank() && it.trimEnd('.').lowercase() !in Titles } ?: "there"
             else -> "Alex"
         }
 
     private val Titles = setOf("mr", "mrs", "ms", "miss", "mdm", "madam", "dr", "prof", "mx", "master")
 
-    /** Condo of the signed-in resident's first household; blank until it loads. */
+    /** Property of the signed-in resident; blank until it loads. */
     val condoName: String
         get() = when (val s = state) {
-            is State.SignedIn -> s.households.firstOrNull()?.condoName.orEmpty()
+            is State.SignedIn -> s.me?.property?.name.orEmpty()
             else -> "Marina Bay Residences"
         }
 
-    /** Block and unit of the first household, e.g. "Block A · #05-01". */
+    /** The first household's place in the property, e.g. "Tower A · 12 · 12-03". */
     val unitLabel: String
         get() = when (val s = state) {
-            is State.SignedIn -> s.households.firstOrNull()?.let { h ->
-                val unit = if (h.floor.isNotBlank() && h.unit.isNotBlank()) "#${h.floor}-${h.unit}" else h.unit
-                listOf(h.block.takeIf { it.isNotBlank() }?.let { "Block $it" }, unit.takeIf { it.isNotBlank() })
-                    .filterNotNull().joinToString(" · ")
-            }.orEmpty()
+            is State.SignedIn -> s.me?.households?.firstOrNull()?.spacePath
+                ?.split('/')?.map { it.trim() }?.filter { it.isNotEmpty() }?.joinToString(" · ").orEmpty()
             else -> "Tower A · Unit 12-03"
         }
-
-    /** Server the app signs in against. Debug builds start on Stage, release builds on Production. */
-    var environment by mutableStateOf(if (BuildConfig.DEBUG) ApiEnvironment.STAGE else ApiEnvironment.PROD)
-        private set
 
     private lateinit var store: SessionStore
     private lateinit var api: ResidentAuthApi
@@ -77,18 +71,7 @@ object ResidentSession {
     fun init(context: Context) {
         if (::store.isInitialized) return
         store = SessionStore(context.applicationContext)
-        ApiEnvironment.entries.find { it.name == store.environment }?.let { environment = it }
-        api = ResidentAuthApi(environment.apiUrl)
-    }
-
-    /** Points the app at another server. A session belongs to one server, so this signs out. */
-    suspend fun switchEnvironment(target: ApiEnvironment) {
-        if (target == environment) return
-        val previous = api
-        environment = target
-        api = ResidentAuthApi(target.apiUrl)
-        io { store.environment = target.name }
-        signOut(previous)
+        api = ResidentAuthApi(API_URL)
     }
 
     /** Turns a saved refresh token back into a session. Runs once per process. */
@@ -98,7 +81,7 @@ object ResidentSession {
             State.SignedIn(authorized(api::me))
         } catch (e: ResidentApiException) {
             // Offline or a server error: keep the sign-in and let the next call retry.
-            if (e.code in SessionEndedCodes) State.SignedOut else State.SignedIn(emptyList())
+            if (e.sessionEnded) State.SignedOut else State.SignedIn(null)
         }
         registerPush()
     }
@@ -118,21 +101,11 @@ object ResidentSession {
         }
     }
 
-    /**
-     * True when kiosk calls travel over the shared signal relay (Production). On Stage
-     * and Local they use the onboarding backend (WebSocket / FCM), so nothing polls the relay.
-     */
-    val usesCallRelay: Boolean get() = environment == ApiEnvironment.PROD
+    /** Intercom calls from the Backend arrive by FCM push; there is no signal relay. */
+    val usesCallRelay: Boolean get() = false
 
-    /**
-     * WebSocket URL for kiosk calls on the onboarding backend, or null when there is
-     * nothing to listen to: not signed in, or on Production, whose calls come from
-     * com-core-service.
-     */
-    val callSocketUrl: String?
-        get() = if (state is State.SignedIn && environment != ApiEnvironment.PROD) {
-            environment.baseUrl.replaceFirst("http", "ws") + "/" + CALL_SOCKET_PATH
-        } else null
+    /** The Backend has no call WebSocket; calls arrive by FCM push. */
+    val callSocketUrl: String? get() = null
 
     /**
      * Access token for the call WebSocket, or null when signed out. [forceRefresh]
@@ -164,14 +137,24 @@ object ResidentSession {
     /** Green Bot reply (`{ reply, action }`) for a signed-in resident. Throws [ResidentApiException]. */
     suspend fun askGreenBot(messages: JSONArray): JSONObject = authorized { api.askGreenBot(it, messages) }
 
-    /** Asks for an SMS code. [phone] includes the country code. Returns seconds until "Resend" is allowed. */
-    suspend fun sendCode(phone: String): Int = io { api.sendCode(phone) }
+    /**
+     * Asks for an SMS code. [phone] includes the country code; [propertyId] is the
+     * property chosen when the phone is in several.
+     */
+    suspend fun sendCode(phone: String, propertyId: String? = null): SendResult = io { api.sendCode(phone, propertyId) }
 
-    suspend fun verifyCode(phone: String, code: String) {
-        val (tokens, households) = io { api.verifyCode(phone, code, device()) }
+    /** Checks the code sent for [propertyId] and signs in, loading the resident for the dashboard. */
+    suspend fun verifyCode(phone: String, propertyId: String, code: String) {
+        val tokens = io { api.verifyCode(phone, propertyId, code, device()) }
         io { store.refreshToken = tokens.refreshToken }
         accessToken = tokens.accessToken
-        state = State.SignedIn(households)
+        val me = try {
+            authorized(api::me)
+        } catch (e: ResidentApiException) {
+            if (e.sessionEnded) throw e
+            null
+        }
+        state = State.SignedIn(me)
         registerPush()
     }
 
@@ -180,9 +163,8 @@ object ResidentSession {
     }
 
     /** Signs out on this phone at once, then ends the session on the server as well, if it can. */
-    suspend fun signOut() = signOut(api)
-
-    private suspend fun signOut(server: ResidentAuthApi) {
+    suspend fun signOut() {
+        val server = api
         val access = accessToken
         val refresh = io { store.refreshToken }
         accessToken = null
@@ -195,7 +177,7 @@ object ResidentSession {
                 try {
                     server.logout(token)
                 } catch (e: ResidentApiException) {
-                    if (e.code != AUTH_REQUIRED || access == null || refresh == null) throw e
+                    if (!e.unauthorized || access == null || refresh == null) throw e
                     server.logout(server.refresh(refresh).accessToken)
                 }
             }
@@ -211,12 +193,12 @@ object ResidentSession {
             return try {
                 io { call(token) }
             } catch (e: ResidentApiException) {
-                if (e.code != AUTH_REQUIRED) throw e
+                if (!e.unauthorized) throw e
                 val fresh = refreshAccessToken(token)
                 io { call(fresh) }
             }
         } catch (e: ResidentApiException) {
-            if (e.code in SessionEndedCodes) {
+            if (e.sessionEnded) {
                 accessToken = null
                 io { store.refreshToken = null }
                 state = State.SignedOut
@@ -231,7 +213,7 @@ object ResidentSession {
         refreshLock.withLock {
             accessToken?.takeIf { it != stale }?.let { return it }
             val refreshToken = io { store.refreshToken }
-                ?: throw ResidentApiException(401, "invalid_refresh_token", "Your session has expired. Please sign in again.")
+                ?: throw ResidentApiException(401, "SESSION_REVOKED", "Your session has expired. Please sign in again.")
             val tokens = io { api.refresh(refreshToken) }
             io { store.refreshToken = tokens.refreshToken }
             accessToken = tokens.accessToken
@@ -242,10 +224,9 @@ object ResidentSession {
     // Shown to admins as the resident's last login. Build.MODEL is the hardware model,
     // not the user-assigned device name (that is personal data).
     private fun device() = JSONObject()
-        .put("id", store.deviceId)
-        .put("model", Build.MODEL)
         .put("platform", "android")
-        .put("appVersion", BuildConfig.VERSION_NAME)
+        .put("model", Build.MODEL)
+        .put("app_version", BuildConfig.VERSION_NAME)
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 }

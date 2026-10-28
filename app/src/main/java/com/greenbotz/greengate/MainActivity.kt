@@ -66,10 +66,6 @@ class MainActivity : ComponentActivity() {
                         onLogout = {
                             showLoginPromo = true
                             scope.launch { ResidentSession.signOut() }
-                        },
-                        onSwitchServer = { server ->
-                            showLoginPromo = true
-                            scope.launch { ResidentSession.switchEnvironment(server) }
                         }
                     )
                 } else {

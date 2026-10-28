@@ -16,6 +16,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The GreenGate Backend (api-gateway) the app signs in against. Set
+        // greengate.apiBaseUrl in ~/.gradle/gradle.properties or pass -Pgreengate.apiBaseUrl=…;
+        // the default is the emulator's alias for a Backend on this machine.
+        val apiBaseUrl = (project.findProperty("greengate.apiBaseUrl") as String? ?: "http://10.0.2.2:8080").trimEnd('/')
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
@@ -73,6 +79,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
 
     testImplementation(libs.junit)
+    // Runs the resident API client against a local server; org.json replaces Android's stub on the JVM.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

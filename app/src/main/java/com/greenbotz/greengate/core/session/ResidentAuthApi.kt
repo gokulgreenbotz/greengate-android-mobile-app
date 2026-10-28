@@ -8,47 +8,42 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import com.greenbotz.greengate.BuildConfig
 
-/** Path of the resident app API on the onboarding service. */
-const val MOBILE_API_PATH = "api/db/resident-app"
+/** Resident app API of the GreenGate Backend (api-gateway). */
+const val API_URL = BuildConfig.API_BASE_URL + "/v1/resident"
 
-/** Path of the kiosk call WebSocket on the onboarding service. */
-const val CALL_SOCKET_PATH = "api/db/ws/calls"
+/** A property the signed-in phone belongs to. */
+data class PropertyChoice(val id: String, val name: String)
 
-/** Onboarding service deployments the app can sign in against. Chosen in Profile. */
-enum class ApiEnvironment(val label: String, val baseUrl: String) {
-    STAGE("Stage", "https://client-onboarding.up.railway.app"),
-    PROD("Production", "https://onboarding.gbotz.site"),
-    /** The Android emulator's alias for the host machine's backend (`npm run dev:data`, port 5176). */
-    LOCAL("Local", "http://10.0.2.2:5176");
+/** One unit of the signed-in resident, e.g. spacePath "Tower A / 12 / 12-03". */
+data class Household(val spaceId: String, val spacePath: String, val role: String)
 
-    val apiUrl get() = "$baseUrl/$MOBILE_API_PATH"
+/** The signed-in resident: their name, the property of the session and their units there. */
+data class Me(val name: String, val property: PropertyChoice, val households: List<Household>)
+
+/** Result of asking for a code: sent for one property, or the phone is in several and one must be chosen. */
+sealed interface SendResult {
+    data class Sent(val property: PropertyChoice) : SendResult
+    data class ChooseProperty(val properties: List<PropertyChoice>) : SendResult
 }
 
-/** One household the signed-in number belongs to. A number can be registered in several units or condos. */
-data class Household(
-    val personId: Int,
-    val requestId: Int,
-    val condoId: Int,
-    val condoName: String,
-    val block: String,
-    val floor: String,
-    val unit: String,
-    /** "Owner" or "Tenant". */
-    val residentType: String,
-    /** "Primary", "Secondary", "Child" or "Other". */
-    val role: String,
-    val name: String
-)
-
-/** A failed call. [code] is the API's `error` value (or `network_error`); [message] is written for the resident. */
-class ResidentApiException(val status: Int, val code: String, override val message: String) : Exception(message)
+/**
+ * A failed call. [code] is the API's `data.code` (or `network_error`, or `http_<status>`);
+ * [message] is written for the resident; [retryAfterSeconds] comes with a 429.
+ */
+class ResidentApiException(
+    val status: Int,
+    val code: String,
+    override val message: String,
+    val retryAfterSeconds: Int? = null
+) : Exception(message)
 
 internal class Tokens(val accessToken: String, val refreshToken: String)
 
 /**
- * Resident app sign-in API of the onboarding service (app-web-ui-client-onboarding,
- * docs/RESIDENT_APP_API.md). Blocking calls: run them off the main thread.
+ * Resident app sign-in API of the GreenGate Backend (`/v1/resident`). Blocking calls:
+ * run them off the main thread. Responses are `{status, message, data}`.
  */
 internal class ResidentAuthApi(apiUrl: String) {
     private val root = apiUrl.trimEnd('/')
@@ -59,29 +54,48 @@ internal class ResidentAuthApi(apiUrl: String) {
     // Claude can take a while to answer; the server gives up after about 40 seconds.
     private val assistantClient by lazy { client.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
-    /** Texts a code if the number is registered (the response is the same either way). Returns seconds until a resend is allowed. */
-    fun sendCode(phone: String): Int =
-        post("/auth/otp/send", JSONObject().put("phone", phone)).optInt("retryAfter", 60)
-
-    fun verifyCode(phone: String, code: String, device: JSONObject): Pair<Tokens, List<Household>> {
-        val body = post("/auth/otp/verify", JSONObject().put("phone", phone).put("code", code).put("device", device))
-        return tokens(body) to households(body)
+    /** Texts a code. [propertyId] picks one property when the phone is in several. */
+    fun sendCode(phone: String, propertyId: String?): SendResult {
+        val body = JSONObject().put("phone", phone)
+        if (propertyId != null) body.put("property_id", propertyId)
+        val data = post("/auth/otp/send", body)
+        val properties = data.optJSONArray("properties") ?: JSONArray()
+        val choices = List(properties.length()) { property(properties.getJSONObject(it)) }
+        return if (data.optBoolean("sent")) SendResult.Sent(choices.first()) else SendResult.ChooseProperty(choices)
     }
+
+    fun verifyCode(phone: String, propertyId: String, code: String, device: JSONObject): Tokens = tokens(
+        post(
+            "/auth/otp/verify",
+            JSONObject().put("phone", phone).put("property_id", propertyId).put("code", code).put("device", device)
+        )
+    )
 
     /** Rotates the refresh token: the one passed in stops working. */
     fun refresh(refreshToken: String): Tokens =
-        tokens(post("/auth/refresh", JSONObject().put("refreshToken", refreshToken)))
+        tokens(post("/auth/refresh", JSONObject().put("refresh_token", refreshToken)))
 
-    fun me(accessToken: String): List<Household> =
-        households(execute(request("/me", accessToken).get().build()))
+    fun me(accessToken: String): Me {
+        val data = execute(request("/me", accessToken).get().build())
+        val list = data.optJSONArray("households") ?: JSONArray()
+        return Me(
+            name = data.text("name"),
+            property = property(data.optJSONObject("property") ?: JSONObject()),
+            households = List(list.length()) { index ->
+                val row = list.getJSONObject(index)
+                Household(spaceId = row.text("space_id"), spacePath = row.text("space_path"), role = row.text("role"))
+            }
+        )
+    }
 
     fun logout(accessToken: String) {
         execute(request("/auth/logout", accessToken).post(EmptyJson).build())
     }
 
-    /** Registers this device's FCM token on the signed-in session, so the office can send it push notifications. */
+    /** Registers this device's FCM token on the signed-in session, so calls and notices reach it. */
     fun registerFcmToken(accessToken: String, fcmToken: String) {
-        execute(request("/device/fcm-token", accessToken).put(JSONObject().put("fcmToken", fcmToken).toString().toRequestBody(JsonType)).build())
+        val body = JSONObject().put("fcm_token", fcmToken).put("voip_token", "").put("platform", "android")
+        execute(request("/device/push-token", accessToken).put(body.toString().toRequestBody(JsonType)).build())
     }
 
     /** Whether the server answers Green Bot with Claude (it has an Anthropic key). */
@@ -105,6 +119,7 @@ internal class ResidentAuthApi(apiUrl: String) {
         if (accessToken != null) header("Authorization", "Bearer $accessToken")
     }
 
+    /** Returns the response's `data`. */
     private fun execute(request: Request, http: OkHttpClient = client): JSONObject {
         val response = try {
             http.newCall(request).execute()
@@ -113,37 +128,22 @@ internal class ResidentAuthApi(apiUrl: String) {
         }
         response.use {
             val body = runCatching { JSONObject(it.body?.string().orEmpty()) }.getOrDefault(JSONObject())
+            val data = body.optJSONObject("data") ?: JSONObject()
             if (!it.isSuccessful) {
                 throw ResidentApiException(
                     it.code,
-                    body.optString("error").ifBlank { "http_${it.code}" },
-                    body.optString("message").ifBlank { "Something went wrong. Please try again." }
+                    data.optString("code").ifBlank { "http_${it.code}" },
+                    body.optString("message").ifBlank { "Something went wrong. Please try again." },
+                    it.header("Retry-After")?.toIntOrNull()
                 )
             }
-            return body
+            return data
         }
     }
 
-    private fun tokens(body: JSONObject) = Tokens(body.getString("accessToken"), body.getString("refreshToken"))
+    private fun tokens(data: JSONObject) = Tokens(data.getString("access_token"), data.getString("refresh_token"))
 
-    private fun households(body: JSONObject): List<Household> {
-        val list = body.optJSONArray("households") ?: return emptyList()
-        return List(list.length()) { index ->
-            val row = list.getJSONObject(index)
-            Household(
-                personId = row.optInt("personId"),
-                requestId = row.optInt("requestId"),
-                condoId = row.optInt("condoId"),
-                condoName = row.text("condoName"),
-                block = row.text("block"),
-                floor = row.text("floor"),
-                unit = row.text("unit"),
-                residentType = row.text("residentType"),
-                role = row.text("role"),
-                name = row.text("name")
-            )
-        }
-    }
+    private fun property(row: JSONObject) = PropertyChoice(id = row.text("id"), name = row.text("name"))
 
     // optString turns a JSON null into the text "null".
     private fun JSONObject.text(name: String) = if (isNull(name)) "" else optString(name)

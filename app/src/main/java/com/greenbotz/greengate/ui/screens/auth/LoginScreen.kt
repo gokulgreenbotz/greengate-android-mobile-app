@@ -70,7 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.PropertyChoice
 import com.greenbotz.greengate.core.session.ResidentApiException
+import com.greenbotz.greengate.core.session.SendResult
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.theme.DMSans
 import kotlinx.coroutines.delay
@@ -103,6 +105,9 @@ fun LoginScreen() {
     var resendIn by rememberSaveable { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
+    // Property the code was sent for; picked by the resident when the number is in several.
+    var propertyId by rememberSaveable { mutableStateOf<String?>(null) }
+    var choices by remember { mutableStateOf<List<PropertyChoice>?>(null) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val clickProgress = remember { Animatable(0f) }
@@ -127,6 +132,29 @@ fun LoginScreen() {
         }
     }
 
+    suspend fun sendFor(forProperty: String?) {
+        busy = true
+        try {
+            when (val result = ResidentSession.sendCode(phone, forProperty)) {
+                is SendResult.Sent -> {
+                    propertyId = result.property.id
+                    resendIn = ResendSeconds
+                    code = ""
+                    enteringCode = true
+                    message = "A verification code has been sent."
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+                is SendResult.ChooseProperty -> choices = result.properties
+            }
+        } catch (e: ResidentApiException) {
+            message = e.message
+            e.retryAfterSeconds?.let { resendIn = it }
+        } finally {
+            busy = false
+        }
+    }
+
     // Step 1: the demo number goes straight to its password; any other number is texted a code.
     suspend fun requestCode(input: String) {
         if (input == DemoMobile) {
@@ -142,20 +170,19 @@ fun LoginScreen() {
             message = "Enter your mobile number."
             return
         }
-        busy = true
-        try {
-            resendIn = ResidentSession.sendCode(number)
-            phone = number
-            code = ""
-            enteringCode = true
-            message = "If this number is registered, a verification code has been sent."
-            keyboardController?.hide()
-            focusManager.clearFocus()
-        } catch (e: ResidentApiException) {
-            message = e.message
-        } finally {
-            busy = false
-        }
+        phone = number
+        sendFor(null)
+    }
+
+    choices?.let { list ->
+        ChoosePropertyDialog(
+            properties = list,
+            onPick = { picked ->
+                choices = null
+                animationScope.launch { sendFor(picked.id) }
+            },
+            onDismiss = { choices = null }
+        )
     }
 
     // Step 2: a successful sign-in changes ResidentSession.state, which swaps this screen for the app.
@@ -178,7 +205,7 @@ fun LoginScreen() {
         try {
             keyboardController?.hide()
             focusManager.clearFocus()
-            ResidentSession.verifyCode(phone, code)
+            ResidentSession.verifyCode(phone, propertyId ?: return, code)
         } catch (e: ResidentApiException) {
             message = e.message
         } finally {
@@ -338,7 +365,7 @@ fun LoginScreen() {
                                 Text(
                                     if (resendIn > 0) "Resend in ${resendIn}s" else "Resend code",
                                     modifier = Modifier.clickable(enabled = resendIn == 0 && !busy) {
-                                        animationScope.launch { requestCode(phone) }
+                                        animationScope.launch { sendFor(propertyId) }
                                     },
                                     fontFamily = DMSans,
                                     fontSize = 13.sp,

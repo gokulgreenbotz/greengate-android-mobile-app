@@ -1,6 +1,6 @@
 # GreenGate (Android resident app)
 
-Jetpack Compose resident app, package `com.greenbotz.greengate`. Signs in with SMS OTP against the onboarding service (`app-web-ui-client-onboarding`, `docs/RESIDENT_APP_API.md`) and receives FCM push notifications from the bms-admin Notify popup.
+Jetpack Compose resident app, package `com.greenbotz.greengate`. Signs in with mobile number + SMS code against the GreenGate Backend (`/v1/resident` on api-gateway; set `greengate.apiBaseUrl` in `~/.gradle/gradle.properties` or pass `-Pgreengate.apiBaseUrl=https://…`) and receives FCM push notifications.
 
 ## Commands
 

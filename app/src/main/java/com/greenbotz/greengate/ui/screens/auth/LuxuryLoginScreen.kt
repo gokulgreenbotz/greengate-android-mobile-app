@@ -57,7 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.PropertyChoice
 import com.greenbotz.greengate.core.session.ResidentApiException
+import com.greenbotz.greengate.core.session.SendResult
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.theme.DMSans
 import kotlinx.coroutines.delay
@@ -88,6 +90,9 @@ fun LuxuryLoginScreen() {
     var resendIn by rememberSaveable { mutableStateOf(0) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    // Property the code was sent for; picked by the resident when the number is in several.
+    var propertyId by rememberSaveable { mutableStateOf<String?>(null) }
+    var choices by remember { mutableStateOf<List<PropertyChoice>?>(null) }
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current as? Activity
     val focusManager = LocalFocusManager.current
@@ -123,6 +128,27 @@ fun LuxuryLoginScreen() {
         }
     }
 
+    suspend fun requestCode(forProperty: String?, sentMessage: String) {
+        busy = true
+        try {
+            when (val result = ResidentSession.sendCode(phone, forProperty)) {
+                is SendResult.Sent -> {
+                    propertyId = result.property.id
+                    resendIn = ResendSeconds
+                    code = ""
+                    enteringCode = true
+                    message = sentMessage
+                }
+                is SendResult.ChooseProperty -> choices = result.properties
+            }
+        } catch (e: ResidentApiException) {
+            message = e.message
+            e.retryAfterSeconds?.let { resendIn = it }
+        } finally {
+            busy = false
+        }
+    }
+
     fun submit() = scope.launch {
         if (busy) return@launch
         if (!enteringCode) {
@@ -138,18 +164,8 @@ fun LuxuryLoginScreen() {
                 message = "Enter your mobile number."
                 return@launch
             }
-            busy = true
-            try {
-                phone = "${selectedCountry.dialCode}$digits"
-                resendIn = ResidentSession.sendCode(phone)
-                code = ""
-                enteringCode = true
-                message = "If this number is registered, a verification code has been sent."
-            } catch (e: ResidentApiException) {
-                message = e.message
-            } finally {
-                busy = false
-            }
+            phone = "${selectedCountry.dialCode}$digits"
+            requestCode(null, "A verification code has been sent.")
         } else if (phone == "000000") {
             if (code == "123456") ResidentSession.startDemo()
             else message = "For this demo, use password 123456."
@@ -160,7 +176,7 @@ fun LuxuryLoginScreen() {
             }
             busy = true
             try {
-                ResidentSession.verifyCode(phone, code)
+                ResidentSession.verifyCode(phone, propertyId ?: return@launch, code)
             } catch (e: ResidentApiException) {
                 message = e.message
             } finally {
@@ -170,18 +186,18 @@ fun LuxuryLoginScreen() {
     }
 
     fun resendCode() {
-        scope.launch {
-            busy = true
-            try {
-                resendIn = ResidentSession.sendCode(phone)
-                code = ""
-                message = "If this number is registered, a new code has been sent."
-            } catch (e: ResidentApiException) {
-                message = e.message
-            } finally {
-                busy = false
-            }
-        }
+        scope.launch { requestCode(propertyId, "A new code has been sent.") }
+    }
+
+    choices?.let { list ->
+        ChoosePropertyDialog(
+            properties = list,
+            onPick = { picked ->
+                choices = null
+                scope.launch { requestCode(picked.id, "A verification code has been sent.") }
+            },
+            onDismiss = { choices = null }
+        )
     }
 
     fun changeNumber() {

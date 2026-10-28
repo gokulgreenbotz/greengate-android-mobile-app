@@ -36,7 +36,6 @@ import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.core.facility.transactionsOf
 import com.greenbotz.greengate.core.push.CallSignalingManager
 import com.greenbotz.greengate.core.push.CallSignalingService
-import com.greenbotz.greengate.core.session.ApiEnvironment
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.visitor.VisitorStore
@@ -74,8 +73,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun MainScreen(
     controller: ReceiverCallController? = null,
-    onLogout: () -> Unit = {},
-    onSwitchServer: (ApiEnvironment) -> Unit = {}
+    onLogout: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activeController = remember(controller) {
@@ -195,7 +193,7 @@ fun MainScreen(
                 screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
                 screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
                 screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
-                screen(Screen.Profile.route) { ProfileScreen(navController, onLogout, onSwitchServer) }
+                screen(Screen.Profile.route) { ProfileScreen(navController, onLogout) }
                 screen(Screen.BookFacility.route, underStatusBar = { true }) {
                     BookFacilityScreen(
                         navController

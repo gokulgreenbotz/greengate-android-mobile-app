@@ -5,16 +5,13 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
-import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 private const val PREFS_NAME = "resident_session"
-private const val KEY_DEVICE_ID = "device_id"
 private const val KEY_REFRESH_TOKEN = "refresh_token"
-private const val KEY_ENVIRONMENT = "environment"
 private const val KEYSTORE = "AndroidKeyStore"
 private const val KEY_ALIAS = "resident_session_key"
 private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -28,20 +25,6 @@ private const val IV_BYTES = 12
  */
 internal class SessionStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    /** Random per-install id. Signing in again with it replaces this phone's previous session. */
-    val deviceId: String by lazy {
-        prefs.getString(KEY_DEVICE_ID, null) ?: UUID.randomUUID().toString().also {
-            prefs.edit().putString(KEY_DEVICE_ID, it).commit()
-        }
-    }
-
-    /** [ApiEnvironment] name the session belongs to; null until one is chosen in Profile. */
-    var environment: String?
-        get() = prefs.getString(KEY_ENVIRONMENT, null)
-        set(value) {
-            prefs.edit().putString(KEY_ENVIRONMENT, value).commit()
-        }
 
     /** Null when signed out, or when the Keystore key is gone (e.g. data restored to a new phone). */
     var refreshToken: String?
