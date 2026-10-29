@@ -42,12 +42,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenbotz.greengate.ui.screens.visitors.InviteFieldBorder
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldButton
+import com.greenbotz.greengate.ui.theme.NavyGoldCream
+import com.greenbotz.greengate.ui.theme.NavyGoldGold
+import com.greenbotz.greengate.ui.theme.NavyGoldNavy
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 import com.greenbotz.greengate.ui.theme.PrimaryGreen
 import com.greenbotz.greengate.ui.theme.SecondaryGreen
 import com.greenbotz.greengate.ui.theme.SoftGreen
 import java.util.Calendar
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+
+/** The picker's accent: the selected slot and day, steppers and the active period. Navy in Theme 4 - Navy & Gold. */
+private val PanelAccent get() = if (NavyGoldTheme) NavyGoldNavy else FacilityGreen
 
 /** A calendar day; months are 0-based like [Calendar.MONTH]. */
 internal data class BookingDay(val year: Int, val month: Int, val day: Int) : Comparable<BookingDay> {
@@ -78,7 +86,7 @@ private val MonthNames = listOf("January", "February", "March", "April", "May", 
 private val WeekdayNames = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 
 // Hourly slots from 7 AM; the last one starts at 9 PM.
-private val SlotHours = 7..21
+internal val SlotHours = 7..21
 
 /** The slot grid shows one half of the day at a time; noon onwards is all Afternoon. */
 private enum class SlotPeriod(val label: String, val hours: IntRange) {
@@ -86,7 +94,7 @@ private enum class SlotPeriod(val label: String, val hours: IntRange) {
     AFTERNOON("Afternoon", 12..SlotHours.last)
 }
 
-private enum class SlotState { OPEN, FEW_LEFT, FULL, PAST }
+internal enum class SlotState { OPEN, FEW_LEFT, FULL, PAST }
 
 internal fun hourLabel(hour: Int) = "${(hour + 11) % 12 + 1}:00 ${if (hour < 12) "AM" else "PM"}"
 
@@ -94,12 +102,27 @@ internal fun hourLabel(hour: Int) = "${(hour + 11) % 12 + 1}:00 ${if (hour < 12)
  * Placeholder availability until a bookings API exists: stable per facility, day and hour,
  * and busier for facilities already flagged as nearly full.
  */
-private fun slotState(facility: String, day: BookingDay, hour: Int, busy: Boolean, today: BookingDay, nowHour: Int): SlotState {
+internal fun slotState(facility: String, day: BookingDay, hour: Int, busy: Boolean, today: BookingDay, nowHour: Int): SlotState {
     if (day == today && hour <= nowHour) return SlotState.PAST
     val roll = Math.floorMod((facility.hashCode() * 31 + day.hashCode()) * 17 + hour * 7919, 100)
     return when {
         roll < if (busy) 40 else 18 -> SlotState.FULL
         roll < if (busy) 60 else 30 -> SlotState.FEW_LEFT
+        else -> SlotState.OPEN
+    }
+}
+
+/**
+ * A booking of [hours] from [start]: FULL or PAST if any hour in it can't be booked or it runs past
+ * the last slot, FEW_LEFT if any hour is nearly full, otherwise OPEN.
+ */
+internal fun rangeState(facility: String, day: BookingDay, start: Int, hours: Int, busy: Boolean, today: BookingDay, nowHour: Int): SlotState {
+    if (start + hours - 1 > SlotHours.last) return SlotState.FULL
+    val states = (start until start + hours).map { slotState(facility, day, it, busy, today, nowHour) }
+    return when {
+        SlotState.PAST in states -> SlotState.PAST
+        SlotState.FULL in states -> SlotState.FULL
+        SlotState.FEW_LEFT in states -> SlotState.FEW_LEFT
         else -> SlotState.OPEN
     }
 }
@@ -126,7 +149,8 @@ internal fun FacilityBookingPanel(
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier.fillMaxWidth().clip(shape)
-            .background(themed(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))), SolidColor(ClassicCream)))
+            .background(if (NavyGoldTheme) SolidColor(Color.White)
+                else themed(Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0xCCEFF8F5))), SolidColor(ClassicCream)))
             .border(1.5.dp, FacilityGlassBorder, shape)
             .padding(16.dp)
     ) {
@@ -182,10 +206,13 @@ private fun BookingDay.chipLabel() = "${shortLabel()} · ${WeekdayNames[toCalend
 @Composable
 private fun DayChip(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
+    // Theme 4: cream with a gold edge when selected.
+    val selectedFill = if (NavyGoldTheme) NavyGoldCream else themed(Color(0xFFDDF5EC), ClassicMint)
+    val selectedBorder = if (NavyGoldTheme) NavyGoldGold else themed(Color(0xFF3FB58E), PrimaryGreen)
     Column(
         modifier.height(58.dp).clip(shape)
-            .background(if (selected) themed(Color(0xFFDDF5EC), ClassicMint) else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) themed(Color(0xFF3FB58E), PrimaryGreen) else InviteFieldBorder, shape)
+            .background(if (selected) selectedFill else Color.White)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) selectedBorder else InviteFieldBorder, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
@@ -264,10 +291,12 @@ private fun DayCell(
     modifier: Modifier, onClick: () -> Unit
 ) {
     val selectable = inMonth && !isPast
+    val selectedFill = if (NavyGoldTheme) NavyGoldButton
+        else Brush.verticalGradient(listOf(themed(Color(0xFF2AA07D), SecondaryGreen), FacilityGreen))
     Box(modifier.height(52.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(46.dp).clip(RoundedCornerShape(16.dp))
-                .then(if (isSelected) Modifier.background(Brush.verticalGradient(listOf(themed(Color(0xFF2AA07D), SecondaryGreen), FacilityGreen))) else Modifier)
+                .then(if (isSelected) Modifier.background(selectedFill) else Modifier)
                 .clickable(enabled = selectable, role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -283,7 +312,7 @@ private fun DayCell(
             )
             if (isToday || isSelected) {
                 Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(5.dp).clip(CircleShape)
-                    .background(if (isSelected) Color.White else FacilityGreen))
+                    .background(if (isSelected) Color.White else PanelAccent))
             }
         }
     }
@@ -313,7 +342,7 @@ private fun SlotPicker(
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            LegendDot(FacilityGreen, "Selected")
+            LegendDot(PanelAccent, "Selected")
             LegendDot(FacilityOrange, "Few left")
             LegendDot(FacilityMuted.copy(alpha = .4f), "Full")
         }
@@ -374,7 +403,7 @@ private fun PeriodToggle(pager: PagerState, onSelect: (SlotPeriod) -> Unit) {
             Modifier.offset {
                 val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, SlotPeriod.entries.lastIndex.toFloat())
                 IntOffset((position * PeriodSegmentWidth.toPx()).roundToInt(), 0)
-            }.size(PeriodSegmentWidth, 32.dp).background(themed(Color(0xFFCDF3E4), ClassicMint), CircleShape)
+            }.size(PeriodSegmentWidth, 32.dp).background(if (NavyGoldTheme) NavyGoldCream else themed(Color(0xFFCDF3E4), ClassicMint), CircleShape)
         )
         Row(Modifier.selectableGroup()) {
             SlotPeriod.entries.forEach { period ->
@@ -386,7 +415,7 @@ private fun PeriodToggle(pager: PagerState, onSelect: (SlotPeriod) -> Unit) {
                 ) {
                     Text(period.label, fontFamily = DMSans, fontSize = 13.sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (active) FacilityGreen else FacilityInk)
+                        color = if (active) PanelAccent else FacilityInk)
                 }
             }
         }
@@ -405,7 +434,7 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
     ) {
         Box(
             Modifier.size(58.dp).clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFE3F5EE), ClassicMint))))
+                .background(Brush.linearGradient(listOf(Color.White, if (NavyGoldTheme) NavyGoldCream else themed(Color(0xFFE3F5EE), ClassicMint))))
                 .border(1.dp, FacilityGlassBorder, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) { glyph() }
@@ -423,14 +452,24 @@ private fun SelectionBar(day: BookingDay, hour: Int?, glyph: @Composable () -> U
             )
         }
         Spacer(Modifier.width(8.dp))
+        // Theme 4: a navy Continue with white type once a slot is picked.
+        val navyGold = NavyGoldTheme
         Row(
             Modifier.height(50.dp).clip(RoundedCornerShape(18.dp))
-                .background(if (hour != null) themed(Color(0xFF8EF0CF), SoftGreen) else FacilityMuted.copy(alpha = .18f))
+                .background(when {
+                    hour == null -> SolidColor(FacilityMuted.copy(alpha = .18f))
+                    navyGold -> NavyGoldButton
+                    else -> SolidColor(themed(Color(0xFF8EF0CF), SoftGreen))
+                })
                 .clickable(enabled = hour != null, role = Role.Button) { hour?.let(onContinue) }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val tint = if (hour != null) FacilityInk else FacilityMuted
+            val tint = when {
+                hour == null -> FacilityMuted
+                navyGold -> Color.White
+                else -> FacilityInk
+            }
             Text("Continue", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = tint)
             Spacer(Modifier.width(8.dp))
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = tint, modifier = Modifier.size(20.dp))
@@ -447,7 +486,7 @@ private fun StepButton(symbol: String, description: String, enabled: Boolean, on
             .alpha(if (enabled) 1f else .35f),
         contentAlignment = Alignment.Center
     ) {
-        Text(symbol, fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = FacilityGreen)
+        Text(symbol, fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = PanelAccent)
     }
 }
 
@@ -467,11 +506,11 @@ private fun SlotChip(hour: Int, state: SlotState, selected: Boolean, modifier: M
     Box(
         modifier.height(48.dp).clip(shape)
             .background(when {
-                selected -> FacilityGreen
+                selected -> PanelAccent
                 enabled -> Color(0xE6FFFFFF)
                 else -> Color(0x66FFFFFF)
             })
-            .border(1.dp, if (selected) FacilityGreen else FacilityGlassBorder, shape)
+            .border(1.dp, if (selected) PanelAccent else FacilityGlassBorder, shape)
             .clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

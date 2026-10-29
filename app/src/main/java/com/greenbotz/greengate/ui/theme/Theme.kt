@@ -48,6 +48,15 @@ private val MeadowColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF6E7A72)
 )
 
+// Theme 4 - Navy & Gold: white cards on a cool off-white page, deep navy type and gold accents.
+private val NavyGoldColorScheme = lightColorScheme(
+    primary = Color(0xFF0A0E5F), secondary = Color(0xFF1F45B5), tertiary = Color(0xFFC0812A),
+    background = Color(0xFFFCFBF8), surface = Color.White, surfaceVariant = Color.White,
+    onPrimary = Color.White, onSecondary = Color.White, onTertiary = Color.White,
+    onBackground = Color(0xFF0A0E5F), onSurface = Color(0xFF0A0E5F),
+    onSurfaceVariant = Color(0xFF5A5F8F)
+)
+
 @Composable
 fun GreenGateTheme(content: @Composable () -> Unit) {
     MaterialTheme(
@@ -56,6 +65,7 @@ fun GreenGateTheme(content: @Composable () -> Unit) {
             AppTheme.ONE -> LightColorScheme
             AppTheme.TWO -> FreshColorScheme
             AppTheme.THREE -> MeadowColorScheme
+            AppTheme.FOUR -> NavyGoldColorScheme
         },
         typography = Typography, content = content
     )

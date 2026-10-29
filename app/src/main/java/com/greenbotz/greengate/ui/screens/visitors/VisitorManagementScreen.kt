@@ -33,20 +33,11 @@ import com.greenbotz.greengate.core.visitor.InviteStatus
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.navigation.Screen
-import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-import com.greenbotz.greengate.ui.screens.facilities.GlassCard
-import com.greenbotz.greengate.ui.screens.facilities.GlassTopBar
 import com.greenbotz.greengate.ui.screens.facilities.StatusPill
 import com.greenbotz.greengate.ui.screens.facilities.StatusTone
-import com.greenbotz.greengate.ui.screens.facilities.greenButton
 import com.greenbotz.greengate.ui.screens.facilities.greenTone
 import com.greenbotz.greengate.ui.screens.facilities.orangeTone
 import com.greenbotz.greengate.ui.screens.facilities.redTone
-import com.greenbotz.greengate.ui.screens.facilities.themed
-import com.greenbotz.greengate.ui.theme.BackgroundCream
 import com.greenbotz.greengate.ui.theme.DMSans
 
 private enum class VisitorTab(val label: String) { ACTIVE("Active"), UPCOMING("Upcoming"), PAST("Past") }
@@ -62,14 +53,18 @@ internal fun InviteStatus.tone() = when (this) {
     InviteStatus.ACTIVE -> greenTone("Active")
     InviteStatus.EXPECTED -> orangeTone("Expected")
     InviteStatus.UPCOMING -> StatusTone("Upcoming", Color(0xFF2F7BD8), Color(0xFFE3EFFD))
-    InviteStatus.USED -> StatusTone("Used", FacilityMuted, Color(0xFFEDF1F0))
-    InviteStatus.EXPIRED -> StatusTone("Expired", FacilityMuted, Color(0xFFEDF1F0))
+    InviteStatus.USED -> StatusTone("Used", InviteMuted, Color(0xFFEDF1F0))
+    InviteStatus.EXPIRED -> StatusTone("Expired", InviteMuted, Color(0xFFEDF1F0))
     InviteStatus.REVOKED -> redTone("Revoked")
 }
 
-/** A visitor's 3D avatar: the clay figure (with a heart for family) or their visit type's art. */
+/** A visitor's 3D avatar: the clay figure (with a heart for family) or their visit type's art; Theme 4 uses its own set. */
 @Composable
 internal fun InviteAvatar(invite: VisitorInvite, size: Dp) {
+    if (NavyGoldInvites) {
+        NavyGoldArtCircle(invite.type.art(), size, iconFraction = .64f)
+        return
+    }
     Box(
         Modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFFDF1E6), Color(0xFFF3E3D3)))),
         contentAlignment = Alignment.Center
@@ -94,19 +89,16 @@ internal fun VisitorManagementScreen(navController: NavController) {
     if (showCreate) CreateInviteSheet(
         onDismiss = { showCreate = false },
         onCreated = { showCreate = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
-    ) { type ->
-        showCreate = false
-        navController.navigate(Screen.CreateInvite.create(type))
-    }
+    )
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    InviteScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
-            GlassTopBar("Visitor Management", onBack = { navController.popBackStack() })
+            InviteTopBar("Visitor Management", onBack = { navController.popBackStack() })
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().height(58.dp)
-                    .shadow(8.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
+                    .shadow(8.dp, RoundedCornerShape(18.dp), ambientColor = InviteButtonShadow, spotColor = InviteButtonShadow)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(greenButton(Color(0xFF1D8A6A)))
+                    .background(inviteButton(Color(0xFF1D8A6A)))
                     .clickable(role = Role.Button) { showCreate = true },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
             ) {
@@ -116,7 +108,7 @@ internal fun VisitorManagementScreen(navController: NavController) {
             }
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(50))
-                    .background(themed(Color(0x99FFFFFF), BackgroundCream)).padding(4.dp)
+                    .background(InviteSegmentFill).padding(4.dp)
             ) {
                 VisitorTab.entries.forEach { t ->
                     val selected = t == tab
@@ -128,7 +120,7 @@ internal fun VisitorManagementScreen(navController: NavController) {
                     ) {
                         Text("${t.label} (${byTab[t]?.size ?: 0})", fontFamily = DMSans, fontSize = 14.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (selected) BookingsDeepGreen else FacilityMuted)
+                            color = if (selected) InviteDeep else InviteMuted)
                     }
                 }
             }
@@ -139,17 +131,17 @@ internal fun VisitorManagementScreen(navController: NavController) {
             ) {
                 if (shown.isEmpty()) item {
                     Text("No ${tab.label.lowercase()} invites.", Modifier.fillMaxWidth().padding(top = 32.dp),
-                        fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted, textAlign = TextAlign.Center)
+                        fontFamily = DMSans, fontSize = 15.sp, color = InviteMuted, textAlign = TextAlign.Center)
                 }
                 items(shown, key = { it.id }) { invite ->
-                    GlassCard(Modifier.clickable(role = Role.Button) { navController.navigate(Screen.InviteDetail.create(invite.id)) }, padding = 12.dp) {
+                    InviteCard(padding = 12.dp, onClick = { navController.navigate(Screen.InviteDetail.create(invite.id)) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InviteAvatar(invite, 52.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(invite.name, fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-                                Text(invite.kindLabel, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
-                                Text(invite.whenLabel(now), fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+                                Text(invite.name, fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = InviteInk)
+                                Text(invite.kindLabel, fontFamily = DMSans, fontSize = 13.sp, color = InviteMuted)
+                                Text(invite.whenLabel(now), fontFamily = DMSans, fontSize = 13.sp, color = InviteMuted)
                             }
                             StatusPill(invite.status(now).tone())
                         }

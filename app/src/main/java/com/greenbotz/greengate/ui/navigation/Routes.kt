@@ -4,7 +4,6 @@ import com.greenbotz.greengate.core.facility.transactionId
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
-import com.greenbotz.greengate.ui.screens.visitors.InviteType
 
 // Package stays com.greenbotz.greengate until the project-wide
 // "Package name does not match containing directory" fix moves it to ui.navigation.
@@ -27,9 +26,10 @@ sealed class Screen(val route: String) {
     data object Notifications : Screen("notifications")
     data object LocationPicker : Screen("location_picker")
     data object Bookings : Screen("bookings")
-    data object BookingPayment : Screen("booking_payment/{facility}/{date}/{hour}/{guests}") {
-        internal fun create(facilityId: String, day: BookingDay, hour: Int, guests: Int) =
-            "booking_payment/${bookingPath(facilityId, day, hour, guests)}"
+    data object BookingPayment : Screen("booking_payment/{facility}/{date}/{hour}/{guests}/{hours}") {
+        /** [hours] is the booking's length; it starts at [hour]. */
+        internal fun create(facilityId: String, day: BookingDay, hour: Int, guests: Int, hours: Int) =
+            "booking_payment/${bookingPath(facilityId, day, hour, guests)}/$hours"
     }
     data object BookingConfirmed : Screen("booking_confirmed/{id}") {
         fun create(bookingId: String) = "booking_confirmed/$bookingId"
@@ -39,9 +39,6 @@ sealed class Screen(val route: String) {
     }
     data object Payments : Screen("payments")
     data object GreenBot : Screen("green_bot")
-    data object CreateInvite : Screen("create_invite/{type}") {
-        internal fun create(type: InviteType) = "create_invite/${type.name}"
-    }
     data object TransactionDetail : Screen("transaction/{id}") {
         fun create(transactionId: String) = "transaction/$transactionId"
     }

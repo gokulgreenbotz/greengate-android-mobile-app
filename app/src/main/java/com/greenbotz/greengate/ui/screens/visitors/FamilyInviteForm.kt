@@ -47,12 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDivider
-import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-import com.greenbotz.greengate.ui.screens.facilities.GlassCard
 import com.greenbotz.greengate.ui.screens.facilities.clockLabel
 import com.greenbotz.greengate.ui.theme.DMSans
 import java.util.Calendar
@@ -145,7 +140,7 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
             onClose = onClose,
             // The review page shows the invite's own avatar, so it skips the header art.
             art = if (page == InvitePage.REVIEW) null else ({
-                InviteTypeArt(InviteType.FAMILY, Modifier.requiredSize(72.dp), blend = false)
+                InviteHeaderArt(InviteType.FAMILY)
             }),
         )
         Spacer(Modifier.height(6.dp))
@@ -187,7 +182,7 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
                         Text("Advanced options »",
                             Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp).clip(RoundedCornerShape(6.dp))
                                 .clickable(role = Role.Button) { page = InvitePage.OPTIONS }.padding(6.dp),
-                            fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = BookingsDeepGreen,
+                            fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = InviteDeep,
                             textDecoration = TextDecoration.Underline)
                     }
                 }
@@ -215,13 +210,13 @@ internal fun FamilyInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreated
 @Composable
 private fun InviteReview(invite: VisitorInvite, options: InviteOptions) {
     Spacer(Modifier.height(4.dp))
-    GlassCard(padding = 16.dp) {
+    InviteCard(padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InviteAvatar(invite, 64.dp)
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(invite.name, fontFamily = DMSans, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text(invite.relationship, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+                Text(invite.name, fontFamily = DMSans, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = InviteInk)
+                Text(invite.relationship, fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -242,9 +237,9 @@ private fun InviteReview(invite: VisitorInvite, options: InviteOptions) {
 @Composable
 private fun ReviewLine(label: String, value: String, last: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 11.dp), verticalAlignment = Alignment.Top) {
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
         Text(value, Modifier.weight(1.2f), fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            color = FacilityInk, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            color = InviteInk, textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
     if (!last) HorizontalDivider(color = BookingsDivider)
 }
@@ -275,11 +270,11 @@ private fun AdditionalOptions(
     InviteLabel("Relationship")
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Relationship.entries.forEach { r ->
-            RelationshipChip(r.name, relationship == r, Modifier.weight(1f)) { onRelationshipChange(r) }
+            InviteChoiceChip(r.name, relationship == r, Modifier.weight(1f)) { onRelationshipChange(r) }
         }
     }
     Spacer(Modifier.height(16.dp))
-    GlassCard(padding = 14.dp) {
+    InviteCard(padding = 14.dp) {
         OptionToggle(null, "Allow vehicle number (optional)", null, options.vehicleAllowed) { onChange(options.copy(vehicleAllowed = it)) }
         AnimatedVisibility(options.vehicleAllowed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -300,7 +295,7 @@ private fun AdditionalOptions(
         OptionToggle(Icons.Outlined.EventRepeat, "Recurring Invite", null, options.recurring) { onChange(options.copy(recurring = it)) }
         AnimatedVisibility(options.recurring, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(Modifier.padding(bottom = 6.dp)) {
-                Text("Repeats", Modifier.padding(bottom = 6.dp), fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+                Text("Repeats", Modifier.padding(bottom = 6.dp), fontFamily = DMSans, fontSize = 13.sp, color = InviteMuted)
                 InviteDropdown(Icons.Outlined.EventRepeat, options.repeat, RepeatOptions) { onChange(options.copy(repeat = RepeatOptions[it])) }
             }
         }
@@ -323,16 +318,16 @@ private fun OptionToggle(icon: ImageVector?, title: String, subtitle: String?, c
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
+            Icon(icon, null, tint = InviteInk, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(title, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-            if (subtitle != null) Text(subtitle, fontFamily = DMSans, fontSize = 12.sp, color = FacilityMuted)
+            Text(title, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = InviteInk)
+            if (subtitle != null) Text(subtitle, fontFamily = DMSans, fontSize = 12.sp, color = InviteMuted)
         }
         // The row handles the toggle, so the switch itself stays passive for accessibility.
         Switch(checked, onCheckedChange = null, colors = SwitchDefaults.colors(
-            checkedTrackColor = FacilityGreen, checkedThumbColor = Color.White, checkedBorderColor = FacilityGreen,
+            checkedTrackColor = InviteAccent, checkedThumbColor = Color.White, checkedBorderColor = InviteAccent,
             uncheckedTrackColor = Color(0xFFDCE3E1), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color(0xFFDCE3E1)
         ))
     }
@@ -341,18 +336,18 @@ private fun OptionToggle(icon: ImageVector?, title: String, subtitle: String?, c
 @Composable
 private fun OptionDivider() = HorizontalDivider(color = BookingsDivider)
 
-/** Styled like Invite Cab's Pickup / Drop chips. */
+/** One of a few choices, such as a relationship; styled like Invite Cab's Pickup / Drop chips. */
 @Composable
-private fun RelationshipChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun InviteChoiceChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier.height(50.dp).clip(ChipShape)
             .background(if (selected) SelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else InviteFieldBorder, ChipShape)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) InviteAccent else InviteFieldBorder, ChipShape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = FacilityInk)
+            color = InviteInk)
     }
 }
 
@@ -377,12 +372,12 @@ internal fun InviteDatePicker(current: BookingDay, onDismiss: () -> Unit, onPick
                     val c = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = ms }
                     onPick(BookingDay(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)))
                 } ?: onDismiss()
-            }) { Text("OK", fontFamily = DMSans, color = BookingsDeepGreen) }
+            }) { Text("OK", fontFamily = DMSans, color = InviteDeep) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", fontFamily = DMSans) } }
     ) {
         DatePicker(state, colors = DatePickerDefaults.colors(
-            selectedDayContainerColor = BookingsDeepGreen, todayDateBorderColor = BookingsDeepGreen, todayContentColor = BookingsDeepGreen
+            selectedDayContainerColor = InviteDeep, todayDateBorderColor = InviteDeep, todayContentColor = InviteDeep
         ))
     }
 }

@@ -43,10 +43,6 @@ import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDivider
-import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-import com.greenbotz.greengate.ui.screens.facilities.GlassCard
 import com.greenbotz.greengate.ui.screens.facilities.clockLabel
 import com.greenbotz.greengate.ui.theme.DMSans
 import java.util.Calendar
@@ -72,8 +68,8 @@ private val DeliverySelectedFill get() = InviteSelectedFill
 // Half hours across the day, in minutes after midnight.
 private val DeliverySlots = (0..47).map { it * 30 }
 
-/** Start times for [day]: right now first when it's today, then the half hours still ahead. */
-private fun deliveryStartTimes(day: BookingDay): List<Int> {
+/** Start times for [day]: right now first when it's today, then the half hours still ahead. Other invites use them too. */
+internal fun deliveryStartTimes(day: BookingDay): List<Int> {
     if (day != BookingDay.today()) return DeliverySlots
     val now = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
     return listOf(now) + DeliverySlots.filter { it > now }
@@ -125,7 +121,7 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
             onBack = if (page == DeliveryPage.SUMMARY) ({ page = DeliveryPage.FORM }) else null,
             onClose = onClose,
         ) {
-            InviteTypeArt(InviteType.DELIVERY, Modifier.requiredSize(72.dp), blend = false)
+            InviteHeaderArt(InviteType.DELIVERY)
         }
         Spacer(Modifier.height(6.dp))
         AnimatedContent(
@@ -191,7 +187,7 @@ internal fun DeliveryInviteForm(onBack: () -> Unit, onClose: () -> Unit, onCreat
 @Composable
 private fun DeliverySummary(invite: VisitorInvite, partner: DeliveryPartner) {
     Spacer(Modifier.height(4.dp))
-    GlassCard(padding = 16.dp) {
+    InviteCard(padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(64.dp).clip(CircleShape).background(Color.White).border(1.dp, DeliveryBorder, CircleShape),
                 contentAlignment = Alignment.Center) {
@@ -199,8 +195,8 @@ private fun DeliverySummary(invite: VisitorInvite, partner: DeliveryPartner) {
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(invite.name, fontFamily = DMSans, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text(invite.kindLabel, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+                Text(invite.name, fontFamily = DMSans, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = InviteInk)
+                Text(invite.kindLabel, fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -213,12 +209,13 @@ private fun DeliverySummary(invite: VisitorInvite, partner: DeliveryPartner) {
     }
 }
 
+/** A label and value in an invite summary; shared with the Other form. */
 @Composable
-private fun SummaryLine(label: String, value: String, last: Boolean = false) {
+internal fun SummaryLine(label: String, value: String, last: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 11.dp), verticalAlignment = Alignment.Top) {
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
         Text(value, Modifier.weight(1.2f), fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            color = FacilityInk, textAlign = TextAlign.End)
+            color = InviteInk, textAlign = TextAlign.End)
     }
     if (!last) HorizontalDivider(color = BookingsDivider)
 }
@@ -226,8 +223,8 @@ private fun SummaryLine(label: String, value: String, last: Boolean = false) {
 @Composable
 private fun PartnerLogo(partner: DeliveryPartner, size: androidx.compose.ui.unit.Dp) {
     if (partner.logo != null) Image(painterResource(partner.logo), null, Modifier.size(size))
-    else Box(Modifier.size(size * .85f).border(1.5.dp, FacilityInk, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(Icons.Outlined.MoreHoriz, null, tint = FacilityInk, modifier = Modifier.size(size * .6f))
+    else Box(Modifier.size(size * .85f).border(1.5.dp, InviteInk, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.MoreHoriz, null, tint = InviteInk, modifier = Modifier.size(size * .6f))
     }
 }
 
@@ -238,12 +235,12 @@ private fun PartnerChip(partner: DeliveryPartner, selected: Boolean, modifier: M
     Column(
         modifier.height(70.dp).clip(shape)
             .background(if (selected) DeliverySelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else DeliveryBorder, shape)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) InviteAccent else DeliveryBorder, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
         PartnerLogo(partner, 26.dp)
         Spacer(Modifier.height(6.dp))
-        Text(partner.label, fontFamily = DMSans, fontSize = 11.sp, color = FacilityInk, maxLines = 1)
+        Text(partner.label, fontFamily = DMSans, fontSize = 11.sp, color = InviteInk, maxLines = 1)
     }
 }

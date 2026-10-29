@@ -67,10 +67,7 @@ internal fun ThemeThreeHomeScreen(navController: NavController) {
         onDismiss = { showInvite = false },
         onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
         onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
-    ) { type ->
-        showInvite = false
-        navController.navigate(Screen.CreateInvite.create(type))
-    }
+    )
     BoxWithConstraints(Modifier.fillMaxSize().background(MeadowPage), contentAlignment = Alignment.TopCenter) {
         val s = minOf(maxWidth.value, 600f) / 411f
         Column(

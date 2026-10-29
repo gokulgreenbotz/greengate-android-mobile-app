@@ -43,11 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,12 +76,19 @@ import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldCream
+import com.greenbotz.greengate.ui.theme.NavyGoldInk
+import com.greenbotz.greengate.ui.theme.NavyGoldNavy
+import com.greenbotz.greengate.ui.theme.NavyGoldPage
+import com.greenbotz.greengate.ui.theme.NavyGoldShadow
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 import java.util.Calendar
 import kotlinx.coroutines.launch
 
-private val ConfirmedBackdrop = Color(0xFFE3F2EF)
-private val ConfirmedDeepGreen = Color(0xFF0F7A5C)
-private val ConfirmedMint = Color(0xFFDDF5EC)
+// Theme 4 - Navy & Gold: a warm white page, navy where these are green.
+private val ConfirmedBackdrop get() = if (NavyGoldTheme) NavyGoldPage else Color(0xFFE3F2EF)
+private val ConfirmedDeepGreen get() = if (NavyGoldTheme) NavyGoldNavy else Color(0xFF0F7A5C)
+private val ConfirmedMint get() = if (NavyGoldTheme) Color(0xFFEEF1F8) else Color(0xFFDDF5EC)
 private val ConfirmedDivider = Color(0x1F14232B)
 private val ConfirmedRed = Color(0xFFD93A2B)
 private val QrInk = Color(0xFF0B3B31)
@@ -145,7 +154,10 @@ internal fun BookingConfirmedScreen(navController: NavController, booking: Booki
             Image(painterResource(facility.photo), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(
+                    // Theme 4 tints the photo navy instead of teal before it fades into the warm white page.
+                    if (NavyGoldTheme) Brush.verticalGradient(
+                        0f to Color(0xB30B1446), 0.42f to Color(0x591F437B), 0.78f to Color(0x99FCFBF8), 1f to ConfirmedBackdrop
+                    ) else Brush.verticalGradient(
                         0f to Color(0xB3235F6E), 0.42f to Color(0x4D3A8796), 0.78f to Color(0x99E3F2EF), 1f to ConfirmedBackdrop
                     )
                 )
@@ -167,7 +179,8 @@ internal fun BookingConfirmedScreen(navController: NavController, booking: Booki
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to facilities", tint = FacilityInk, modifier = Modifier.size(24.dp))
                 }
                 Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(painterResource(R.drawable.greengate_logo), null, Modifier.size(52.dp))
+                    // Theme 4 shows its gold gate in place of the green logo.
+                    Image(painterResource(if (NavyGoldTheme) R.drawable.theme4_gate else R.drawable.greengate_logo), null, Modifier.size(52.dp))
                     Text("Green Gate", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     Text("SECURE · SAFE · TOGETHER", fontFamily = DMSans, fontSize = 9.sp, letterSpacing = 1.2.sp, color = Color(0xE6FFFFFF))
                 }
@@ -196,7 +209,7 @@ internal fun BookingConfirmedScreen(navController: NavController, booking: Booki
                 "Add to Calendar", Icons.Outlined.CalendarMonth,
                 FacilityInk,
                 Modifier.fillMaxWidth().height(58.dp),
-                background = Brush.horizontalGradient(listOf(Color(0xFF9AF0D2), Color(0xFF7FE6C4)))
+                background = if (NavyGoldTheme) MintButton else Brush.horizontalGradient(listOf(Color(0xFF9AF0D2), Color(0xFF7FE6C4)))
             ) {
                 addToCalendar(context, facility, day, hour, reference)
             }
@@ -292,14 +305,38 @@ private fun addToCalendar(context: Context, facility: Facility, day: BookingDay,
     }
 }
 
+/** A QR pass card; [description] is what a screen reader announces. Navy on white with a gold edge in Theme 4. */
 @Composable
-internal fun QrPass(content: String, reference: String) {
+internal fun QrPass(content: String, reference: String, description: String = "QR pass for booking $reference") {
     val matrix = remember(content) {
         QRCodeWriter().encode(
             content, BarcodeFormat.QR_CODE, 0, 0,
             // High correction leaves room for the logo over the centre.
             mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 0)
         )
+    }
+    if (NavyGoldTheme) {
+        val shape = RoundedCornerShape(26.dp)
+        Box(
+            Modifier.shadow(14.dp, shape, ambientColor = NavyGoldShadow, spotColor = NavyGoldShadow).clip(shape)
+                .background(Color.White).border(1.5.dp, Color(0xFFE8D3A6), shape).padding(18.dp)
+                .semantics { contentDescription = description },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(Modifier.size(196.dp)) {
+                // One path for every module, so neighbouring squares fill as one shape with no hairline seams.
+                val cell = size.width / matrix.width
+                val modules = Path()
+                for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
+                    if (matrix[x, y]) modules.addRect(Rect(Offset(x * cell, y * cell), Size(cell, cell)))
+                }
+                drawPath(modules, NavyGoldInk)
+            }
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                Image(painterResource(R.drawable.theme4_gate), null, Modifier.size(36.dp))
+            }
+        }
+        return
     }
     Box(
         Modifier.shadow(18.dp, RoundedCornerShape(28.dp), ambientColor = Color(0x667FE6C4), spotColor = Color(0x667FE6C4))
@@ -309,7 +346,7 @@ internal fun QrPass(content: String, reference: String) {
     ) {
         Box(
             Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).padding(14.dp)
-                .semantics { contentDescription = "QR pass for booking $reference" },
+                .semantics { contentDescription = description },
             contentAlignment = Alignment.Center
         ) {
             Canvas(Modifier.size(184.dp)) {
@@ -353,8 +390,11 @@ internal fun ScanHint(facilityName: String, hour: Int, hours: Int = 1) {
 private fun ConfirmedCard(content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(24.dp)
     Column(
-        Modifier.fillMaxWidth().shadow(2.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
-            .clip(shape).background(Color(0xCCFFFFFF)).border(1.5.dp,
+        Modifier.fillMaxWidth()
+            .shadow(if (NavyGoldTheme) 4.dp else 2.dp, shape,
+                ambientColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x1A0F3B33),
+                spotColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x1A0F3B33))
+            .clip(shape).background(if (NavyGoldTheme) Color.White else Color(0xCCFFFFFF)).border(if (NavyGoldTheme) 1.dp else 1.5.dp,
                 FacilityGlassBorder, shape)
             .padding(16.dp),
         content = content
@@ -378,7 +418,7 @@ private fun BookingDetailsCard(facility: Facility, day: BookingDay, hour: Int, g
             }
         }
         Spacer(Modifier.height(6.dp))
-        DetailRow(icon = { Image(painterResource(facility.artwork), null, Modifier.size(24.dp)) }, "Facility", facility.name)
+        DetailRow(icon = { Image(painterResource(facility.themedArtwork), null, Modifier.size(24.dp)) }, "Facility", facility.name)
         HorizontalDivider(Modifier.padding(start = 52.dp), color = ConfirmedDivider)
         DetailRow(Icons.Outlined.CalendarMonth, "Date", day.longLabel())
         HorizontalDivider(Modifier.padding(start = 52.dp), color = ConfirmedDivider)
@@ -428,7 +468,8 @@ private fun PaidSummaryCard(deposit: Int, method: PaymentMethod) {
         if (deposit > 0) {
             Spacer(Modifier.height(12.dp))
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0x99E6F3F0)).padding(12.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(if (NavyGoldTheme) NavyGoldCream else Color(0x99E6F3F0)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Outlined.Info, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
@@ -457,7 +498,7 @@ private fun PaidRow(icon: ImageVector, label: String, amount: Int) {
 @Composable
 private fun ActionButton(
     label: String, icon: ImageVector, tint: Color, modifier: Modifier,
-    background: Brush = Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))),
+    background: Brush = if (NavyGoldTheme) SolidColor(Color.White) else Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))),
     onClick: () -> Unit
 ) {
     Row(

@@ -49,6 +49,7 @@ internal fun LoginGlassPanel(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val palette = LocalLoginPalette.current
     val (backdrop, backdropSize, backdropOrigin) = LocalLoginGlassBackdrop.current
     var position by remember { mutableStateOf(Offset.Zero) }
     val shape = RoundedCornerShape(24.dp)
@@ -89,17 +90,18 @@ internal fun LoginGlassPanel(
             Modifier.matchParentSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xCC102339), Color(0xE8031B30), Color(0xF005182A))
+                        if (palette.light) listOf(Color(0xABFFFFFF), Color(0xD6FFFFFF), Color(0xF0FFFFFF))
+                        else listOf(Color(0xCC102339), Color(0xE8031B30), Color(0xF005182A))
                     )
                 )
                 .drawWithCache {
                     val warmReflection = Brush.radialGradient(
-                        listOf(Color(0x19DDB07F), Color.Transparent),
+                        listOf(Color(if (palette.light) 0x24F0CD96 else 0x19DDB07F), Color.Transparent),
                         center = Offset(size.width * .09f, 0f),
                         radius = size.width * .72f
                     )
                     val coolReflection = Brush.radialGradient(
-                        listOf(Color(0x12CBDEEF), Color.Transparent),
+                        listOf(Color(if (palette.light) 0x66FFFFFF else 0x12CBDEEF), Color.Transparent),
                         center = Offset(size.width * .94f, size.height * .03f),
                         radius = size.width * .8f
                     )
@@ -110,7 +112,9 @@ internal fun LoginGlassPanel(
                 }
                 .border(
                     .6.dp,
-                    Brush.linearGradient(
+                    if (palette.light) Brush.linearGradient(
+                        listOf(Color.White, Color(0xA3E5C18E), Color(0xFFF4D7AA))
+                    ) else Brush.linearGradient(
                         0f to Color(0x9CDDB07F),
                         .38f to Color(0x8EA7C2DD),
                         .68f to Color(0x366E8AAB),
@@ -142,27 +146,38 @@ internal fun LoginSurfaceGlow(modifier: Modifier = Modifier, strength: Float) {
     }
 }
 
-internal fun Modifier.loginGlassControl(focused: Boolean = false): Modifier = this
+@Composable
+internal fun Modifier.loginGlassControl(focused: Boolean = false): Modifier {
+    val palette = LocalLoginPalette.current
+    return this
     .clip(RoundedCornerShape(22.dp))
     .background(
         Brush.linearGradient(
-            listOf(Color(0x243D536C), Color(0x161F3C57), Color(0x300A1E34))
+            if (palette.light) listOf(Color(0xB8FFFFFF), Color(0x70FFFFFF), Color(0xABF8F8F8))
+            else listOf(Color(0x243D536C), Color(0x161F3C57), Color(0x300A1E34))
         )
     )
     .border(
         if (focused) 1.dp else .65.dp,
         Brush.verticalGradient(
-            if (focused) listOf(Color(0xFFECD4AE), Color(0xB3A6C9E5), Color(0x89DDB07F))
+            if (palette.light && focused) listOf(Color(0xFFD5AA6A), Color(0xFFC3A273), Color(0xFFD5AA6A))
+            else if (palette.light) listOf(Color(0xFFC9CBD0), Color(0xA8D1D2D5), Color(0xFFC5C7CB))
+            else if (focused) listOf(Color(0xFFECD4AE), Color(0xB3A6C9E5), Color(0x89DDB07F))
             else listOf(Color(0xB08FA6C1), Color(0x54728BA6), Color(0x416F8197))
         ),
         RoundedCornerShape(22.dp)
     )
+}
 
-internal fun Modifier.loginGoldButton(): Modifier = this
+@Composable
+internal fun Modifier.loginGoldButton(): Modifier {
+    val light = LocalLoginPalette.current.light
+    return this
     .clip(RoundedCornerShape(25.dp))
     .background(
         Brush.verticalGradient(
-            listOf(Color(0xFFFFE6B1), Color(0xFFF0CD96), Color(0xFFD0A779))
+            if (light) listOf(Color(0xFFFFF0C9), Color(0xFFF8DDA8), Color(0xFFE9BE7A))
+            else listOf(Color(0xFFFFE6B1), Color(0xFFF0CD96), Color(0xFFD0A779))
         )
     )
     .border(
@@ -170,3 +185,4 @@ internal fun Modifier.loginGoldButton(): Modifier = this
         Brush.verticalGradient(listOf(Color(0xFFFFF1CA), Color(0xFFDFB06D))),
         RoundedCornerShape(25.dp)
     )
+}

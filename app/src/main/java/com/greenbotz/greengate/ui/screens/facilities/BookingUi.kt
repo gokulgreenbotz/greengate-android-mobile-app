@@ -46,8 +46,15 @@ import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStatus
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.core.session.AppTheme
+import com.greenbotz.greengate.ui.screens.home.SilkLines
 import com.greenbotz.greengate.ui.screens.visitors.tone
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldButton
+import com.greenbotz.greengate.ui.theme.NavyGoldCream
+import com.greenbotz.greengate.ui.theme.NavyGoldNavy
+import com.greenbotz.greengate.ui.theme.NavyGoldPage
+import com.greenbotz.greengate.ui.theme.NavyGoldShadow
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 import com.greenbotz.greengate.ui.theme.PrimaryGreen
 import com.greenbotz.greengate.ui.theme.PrimaryGreenDark
 import com.greenbotz.greengate.ui.theme.SoftGreen
@@ -66,23 +73,37 @@ internal val ClassicLine = Color(0xFFEAE3D6)
 internal val ClassicMint = Color(0xFFEDF3EA)
 internal val ClassicBackdrop = SolidColor(Color.White)
 
-/** A primary button's green, lighter at the top; [glassTop] is that top colour in the glass theme. */
-internal fun greenButton(glassTop: Color) = Brush.verticalGradient(listOf(themed(glassTop, PrimaryGreen), BookingsDeepGreen))
+// Theme 4 - Navy & Gold swaps these greens for navy, gold and warm white (see NavyGold.kt); checked first below.
+
+/** A primary button's green, lighter at the top; [glassTop] is that top colour in the glass theme. Navy in Theme 4. */
+internal fun greenButton(glassTop: Color): Brush =
+    if (NavyGoldTheme) NavyGoldButton else Brush.verticalGradient(listOf(themed(glassTop, PrimaryGreen), BookingsDeepGreen))
 
 // Shared by My Bookings, Booking Details, Payments & Deposits and Transaction Details.
 private val GlassBackdrop = Brush.verticalGradient(
     0f to Color(0xFFBFE3E6), 0.3f to Color(0xFFDCEFEE), 1f to Color(0xFFE8F5F2)
 )
-internal val BookingsBackdrop get() = themed(GlassBackdrop, ClassicBackdrop)
-internal val BookingsDeepGreen get() = themed(Color(0xFF0F6B54), PrimaryGreenDark)
-internal val BookingsMint get() = themed(Color(0xFFDDF5EC), SoftGreen)
+internal val BookingsBackdrop: Brush get() = if (NavyGoldTheme) SolidColor(NavyGoldPage) else themed(GlassBackdrop, ClassicBackdrop)
+internal val BookingsDeepGreen get() = if (NavyGoldTheme) NavyGoldNavy else themed(Color(0xFF0F6B54), PrimaryGreenDark)
+/** Soft accent tiles and fills: mint, or a pale navy in Theme 4. */
+internal val BookingsMint get() = if (NavyGoldTheme) Color(0xFFEEF1F8) else themed(Color(0xFFDDF5EC), SoftGreen)
+
+/** A full booking screen's background: [BookingsBackdrop], plus the Home screen's silk lines in Theme 4. */
+@Composable
+internal fun BookingsScreen(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+        if (NavyGoldTheme) SilkLines(Modifier.fillMaxWidth().height(260.dp))
+        content()
+    }
+}
 internal val BookingsDivider = Color(0x1F14232B)
 internal val BookingsRed = Color(0xFFD93A2B)
 
 /** A status chip, e.g. a green "Confirmed" or an orange "Held". */
 internal class StatusTone(val label: String, val color: Color, val background: Color)
 
-internal fun greenTone(label: String) = StatusTone(label, FacilityGreen, BookingsMint)
+// Status greens stay green in Theme 4; only the mint behind them is pinned, as BookingsMint turns navy there.
+internal fun greenTone(label: String) = StatusTone(label, FacilityGreen, if (NavyGoldTheme) Color(0xFFE3F4EC) else BookingsMint)
 internal fun orangeTone(label: String) = StatusTone(label, FacilityOrange, Color(0xFFFFEEDF))
 internal fun redTone(label: String) = StatusTone(label, BookingsRed, Color(0xFFFDE7E4))
 
@@ -106,7 +127,7 @@ internal fun GlassTopBar(title: String, onBack: () -> Unit, action: (@Composable
         GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
         Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), textAlign = TextAlign.Center,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
-            fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+            fontFamily = DMSans, fontSize = 22.sp, fontWeight = if (NavyGoldTheme) FontWeight.Bold else FontWeight.SemiBold, color = FacilityInk)
         // Without an action, an empty space as wide as Back keeps the title centred.
         if (action != null) action() else Spacer(Modifier.size(48.dp))
     }
@@ -114,9 +135,10 @@ internal fun GlassTopBar(title: String, onBack: () -> Unit, action: (@Composable
 
 @Composable
 internal fun GlassIconButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shadow = if (NavyGoldTheme) NavyGoldShadow else Color(0x22000000)
     Box(
-        modifier.size(48.dp).shadow(6.dp, CircleShape, ambientColor = Color(0x22000000), spotColor = Color(0x22000000))
-            .clip(CircleShape).background(Color(0xF2FFFFFF))
+        modifier.size(48.dp).shadow(6.dp, CircleShape, ambientColor = shadow, spotColor = shadow)
+            .clip(CircleShape).background(if (NavyGoldTheme) Color.White else Color(0xF2FFFFFF))
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -169,9 +191,13 @@ internal fun GlassCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val shape = RoundedCornerShape(24.dp)
+    // Theme 4: a solid white card with a hairline edge and a soft navy shadow.
+    val navyGold = NavyGoldTheme
+    val shadow = if (navyGold) NavyGoldShadow else Color(0x1A0F3B33)
     Column(
-        modifier.fillMaxWidth().shadow(2.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
-            .clip(shape).background(themed(Color(0xB3FFFFFF), ClassicCream)).border(1.5.dp, FacilityGlassBorder, shape)
+        modifier.fillMaxWidth().shadow(if (navyGold) 4.dp else 2.dp, shape, ambientColor = shadow, spotColor = shadow)
+            .clip(shape).background(if (navyGold) Color.White else themed(Color(0xB3FFFFFF), ClassicCream))
+            .border(if (navyGold) 1.dp else 1.5.dp, FacilityGlassBorder, shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(padding),
         content = content
@@ -183,18 +209,19 @@ internal fun GlassCard(
 internal fun ArtworkTile(facility: Facility, size: Dp) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(size * .2f))
-            .background(Brush.linearGradient(listOf(Color.White, themed(Color(0xFFDDF0EA), ClassicMint)))),
+            .background(Brush.linearGradient(listOf(Color.White, if (NavyGoldTheme) NavyGoldCream else themed(Color(0xFFDDF0EA), ClassicMint)))),
         contentAlignment = Alignment.Center
     ) {
-        Image(painterResource(facility.artwork), null, Modifier.size(size * .8f))
+        Image(painterResource(facility.themedArtwork), null, Modifier.size(size * .8f))
     }
 }
 
-/** Rounded pill button; [background] defaults to frosted glass, or plain white in Classic. */
+/** Rounded pill button; [background] defaults to frosted glass, or plain white in Classic and Theme 4. */
 @Composable
 internal fun PillButton(
     label: String, modifier: Modifier, tint: Color = FacilityInk, icon: ImageVector? = null,
-    background: Brush = themed(Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))), SolidColor(Color.White)),
+    background: Brush = if (NavyGoldTheme) SolidColor(Color.White)
+        else themed(Brush.linearGradient(listOf(Color(0xE6FFFFFF), Color(0xCCF2FAF7))), SolidColor(Color.White)),
     onClick: () -> Unit
 ) {
     Row(
@@ -213,7 +240,9 @@ internal fun PillButton(
 }
 
 private val GlassMintButton = Brush.horizontalGradient(listOf(Color(0xFF9AF0D2), Color(0xFF7FE6C4)))
-internal val MintButton get() = themed(GlassMintButton, SolidColor(SoftGreen))
+// Theme 4's soft secondary button: cream into light gold, under navy type.
+private val GoldCreamButton = Brush.verticalGradient(listOf(Color(0xFFFBF1DC), Color(0xFFF1DDB4)))
+internal val MintButton get() = if (NavyGoldTheme) GoldCreamButton else themed(GlassMintButton, SolidColor(SoftGreen))
 internal val RedTintButton = Brush.linearGradient(listOf(Color(0xFFFDE9E6), Color(0xFFFBDCD7)))
 
 /** Upcoming bookings read "Confirmed" once their QR pass is ready, "Upcoming" before that. */

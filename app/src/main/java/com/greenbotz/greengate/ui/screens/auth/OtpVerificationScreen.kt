@@ -17,6 +17,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -169,10 +171,15 @@ private fun CodeBoxes(
         onValueChange = { onCodeChange(it.filter(Char::isDigit).take(OtpLength)) },
         modifier = modifier.fillMaxWidth().testTag("otp_code_input"),
         singleLine = true,
-        textStyle = TextStyle(color = Ivory),
+        textStyle = TextStyle(color = Color.Transparent),
+        cursorBrush = SolidColor(Color.Transparent),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
-        decorationBox = {
+        decorationBox = { innerTextField ->
+            Box {
+                // Keep the editable core attached for IME, paste and accessibility input.
+                // The six boxes below supply the visible digits and focus indication.
+                Box(Modifier.matchParentSize()) { innerTextField() }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 repeat(OtpLength) { index ->
                     // The glow marks the box the next digit goes into.
@@ -184,6 +191,7 @@ private fun CodeBoxes(
                         Text(code.getOrNull(index)?.toString().orEmpty(), color = Ivory, fontFamily = DMSans, fontSize = 20.sp)
                     }
                 }
+            }
             }
         }
     )

@@ -112,16 +112,17 @@ fun HomeScreen(navController: NavController) {
         ThemeThreeHomeScreen(navController)
         return
     }
+    if (AppPreferences.theme == AppTheme.FOUR) {
+        ThemeFourHomeScreen(navController)
+        return
+    }
     var showSos by remember { mutableStateOf(false) }
     var showInvite by remember { mutableStateOf(false) }
     if (showInvite) CreateInviteSheet(
         onDismiss = { showInvite = false },
         onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
         onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
-    ) { type ->
-        showInvite = false
-        navController.navigate(Screen.CreateInvite.create(type))
-    }
+    )
     Column(
         Modifier.fillMaxSize().then(if (AppPreferences.theme == AppTheme.ONE) Modifier.background(MarinaBackground) else Modifier).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally

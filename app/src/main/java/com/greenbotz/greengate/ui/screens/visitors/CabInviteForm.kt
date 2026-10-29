@@ -50,10 +50,6 @@ import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.screens.facilities.BookingDay
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
 import com.greenbotz.greengate.ui.screens.facilities.MonthCalendar
 import com.greenbotz.greengate.ui.screens.facilities.QuickDayChips
 import com.greenbotz.greengate.ui.screens.facilities.clockLabel
@@ -156,7 +152,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
 
     Column(Modifier.fillMaxWidth().imePadding()) {
         InviteFormHeader("Invite Cab", "Create a cab invite for pickup or drop", onBack = null, onClose = onClose) {
-            InviteTypeArt(InviteType.CAB, Modifier.requiredSize(72.dp), blend = false)
+            InviteHeaderArt(InviteType.CAB)
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.padding(horizontal = 20.dp)) {
@@ -166,9 +162,9 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label, Modifier.padding(vertical = 10.dp), fontFamily = DMSans, fontSize = 15.sp,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (selected) BookingsDeepGreen else FacilityMuted)
+                        color = if (selected) InviteDeep else InviteMuted)
                     Box(Modifier.fillMaxWidth().height(if (selected) 2.5.dp else 1.dp)
-                        .background(if (selected) BookingsDeepGreen else CabFieldBorder))
+                        .background(if (selected) InviteDeep else CabFieldBorder))
                 }
             }
         }
@@ -201,12 +197,16 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                         val selected = i in days
                         Box(
                             Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) BookingsDeepGreen else themed(Color(0xFFF2F5F4), BackgroundCream))
+                                .background(when {
+                                    selected -> InviteDeep
+                                    NavyGoldInvites -> Color(0xFFF3F0EA)
+                                    else -> themed(Color(0xFFF2F5F4), BackgroundCream)
+                                })
                                 .toggleable(selected, role = Role.Checkbox) { days = if (it) days + i else days - i },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(name, fontFamily = DMSans, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selected) Color.White else FacilityInk)
+                                color = if (selected) Color.White else InviteInk)
                         }
                     }
                 }
@@ -228,17 +228,17 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
             }
 
             Row(Modifier.padding(top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Vehicle Number", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-                Icon(Icons.Outlined.Info, null, Modifier.padding(start = 6.dp).size(16.dp), tint = FacilityMuted)
+                Text("Vehicle Number", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = InviteInk)
+                Icon(Icons.Outlined.Info, null, Modifier.padding(start = 6.dp).size(16.dp), tint = InviteMuted)
             }
             InviteField(Icons.Outlined.DirectionsCar) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                    if (vehicle.isEmpty()) Text("SMC 1234 A", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
+                    if (vehicle.isEmpty()) Text("SMC 1234 A", fontFamily = DMSans, fontSize = 15.sp, color = InviteMuted.copy(alpha = .6f))
                     BasicTextField(
                         vehicle, { vehicle = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' }.take(12) },
                         Modifier.fillMaxWidth().padding(end = 30.dp), singleLine = true,
-                        textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
-                        cursorBrush = SolidColor(BookingsDeepGreen),
+                        textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = InviteInk),
+                        cursorBrush = SolidColor(InviteDeep),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done)
                     )
                     if (vehicle.isNotEmpty()) Icon(Icons.Rounded.Cancel, "Clear vehicle number",
@@ -247,7 +247,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                 }
             }
             Text("Singapore vehicle format (e.g. SMC 1234 A). Format can be configured later.",
-                Modifier.padding(top = 6.dp, start = 2.dp), fontFamily = DMSans, fontSize = 11.sp, lineHeight = 15.sp, color = FacilityMuted)
+                Modifier.padding(top = 6.dp, start = 2.dp), fontFamily = DMSans, fontSize = 11.sp, lineHeight = 15.sp, color = InviteMuted)
 
             InviteLabel("Company Name")
             InviteDropdown(Icons.Outlined.DirectionsCar, company.label, CabCompany.entries.map { it.label }) { company = CabCompany.entries[it] }
@@ -262,7 +262,7 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                 Text(if (advanced) "Hide advanced options" else "Advanced options »",
                     Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp).clip(RoundedCornerShape(6.dp))
                         .clickable(role = Role.Button) { advanced = !advanced }.padding(6.dp),
-                    fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = BookingsDeepGreen,
+                    fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = InviteDeep,
                     textDecoration = TextDecoration.Underline)
             }
             AnimatedVisibility(advanced && !frequent, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -272,21 +272,21 @@ internal fun CabInviteForm(onClose: () -> Unit, onCreated: (VisitorInvite) -> Un
                             .toggleable(notifyOnEntry, role = Role.Switch) { notifyOnEntry = it }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Outlined.NotificationsActive, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Outlined.NotificationsActive, null, tint = InviteInk, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Notify me on entry", Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk)
+                        Text("Notify me on entry", Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp, color = InviteInk)
                         Switch(notifyOnEntry, onCheckedChange = null, colors = SwitchDefaults.colors(
-                            checkedTrackColor = FacilityGreen, checkedThumbColor = Color.White, checkedBorderColor = FacilityGreen,
+                            checkedTrackColor = InviteAccent, checkedThumbColor = Color.White, checkedBorderColor = InviteAccent,
                             uncheckedTrackColor = Color(0xFFDCE3E1), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color(0xFFDCE3E1)
                         ))
                     }
                     InviteLabel("Notes (Optional)")
                     InviteField(null) {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                            if (note.isEmpty()) Text("e.g. pick up at the lobby", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted.copy(alpha = .6f))
+                            if (note.isEmpty()) Text("e.g. pick up at the lobby", fontFamily = DMSans, fontSize = 15.sp, color = InviteMuted.copy(alpha = .6f))
                             BasicTextField(note, { note = it.take(120) }, Modifier.fillMaxWidth(), singleLine = true,
-                                textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = FacilityInk),
-                                cursorBrush = SolidColor(BookingsDeepGreen),
+                                textStyle = TextStyle(fontFamily = DMSans, fontSize = 15.sp, color = InviteInk),
+                                cursorBrush = SolidColor(InviteDeep),
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
                         }
                     }
@@ -303,15 +303,15 @@ private fun DirectionChip(label: String, icon: ImageVector, selected: Boolean, m
     Row(
         modifier.height(50.dp).clip(CabFieldShape)
             .background(if (selected) CabSelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else CabFieldBorder, CabFieldShape)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) InviteAccent else CabFieldBorder, CabFieldShape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(26.dp).clip(CircleShape).background(FacilityGreen), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(26.dp).clip(CircleShape).background(InviteAccent), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(10.dp))
-        Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
+        Text(label, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = InviteInk)
     }
 }
 
@@ -320,13 +320,13 @@ private fun CompanyChip(company: CabCompany, selected: Boolean, modifier: Modifi
     Column(
         modifier.height(70.dp).clip(RoundedCornerShape(12.dp))
             .background(if (selected) CabSelectedFill else Color.White)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) FacilityGreen else CabFieldBorder, RoundedCornerShape(12.dp))
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) InviteAccent else CabFieldBorder, RoundedCornerShape(12.dp))
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
         company.logo?.let { Image(painterResource(it), company.label, Modifier.height(26.dp)) }
         Spacer(Modifier.height(6.dp))
-        Text(company.label, fontFamily = DMSans, fontSize = 11.sp, color = FacilityInk, maxLines = 1)
+        Text(company.label, fontFamily = DMSans, fontSize = 11.sp, color = InviteInk, maxLines = 1)
     }
 }
 
@@ -346,9 +346,9 @@ private fun SelectDateSheet(current: BookingDay, onDismiss: () -> Unit, onPick: 
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Select Date", Modifier.weight(1f), fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+                Text("Select Date", Modifier.weight(1f), fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = InviteInk)
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.Close, "Close", tint = InviteInk, modifier = Modifier.size(24.dp))
                 }
             }
             Spacer(Modifier.height(12.dp))

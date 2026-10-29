@@ -98,9 +98,9 @@ internal object BookingStore {
 
     fun find(id: String?) = bookings.find { it.id == id }
 
-    fun add(facility: Facility, day: BookingDay, hour: Int, guests: Int, bookingFee: Int, method: PaymentMethod): Booking {
+    fun add(facility: Facility, day: BookingDay, hour: Int, hours: Int, guests: Int, bookingFee: Int, method: PaymentMethod): Booking {
         val booking = Booking(
-            id = "GG${Random.nextInt(100_000, 999_999)}", facilityId = facility.id, day = day, hour = hour, hours = 1,
+            id = "GG${Random.nextInt(100_000, 999_999)}", facilityId = facility.id, day = day, hour = hour, hours = hours,
             guests = guests, bookingFee = bookingFee, deposit = facility.deposit, method = method,
             bookedAt = System.currentTimeMillis()
         )

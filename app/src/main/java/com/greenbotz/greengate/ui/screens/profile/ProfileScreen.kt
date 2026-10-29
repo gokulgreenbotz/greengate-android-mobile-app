@@ -1,5 +1,9 @@
 package com.greenbotz.greengate.ui.screens.profile
 
+import android.os.Handler
+import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,9 +18,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Feedback
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,10 +52,12 @@ import com.greenbotz.greengate.core.session.AppTheme
 import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.core.session.LoginExperience
 import com.greenbotz.greengate.core.session.ResidentSession
+import com.greenbotz.greengate.ui.screens.assistant.greenBotVoiceFor
 import com.greenbotz.greengate.ui.screens.home.LayeredActionIcon
 import com.greenbotz.greengate.ui.screens.home.LayeredIconSetZero
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
 import com.greenbotz.greengate.ui.theme.DMSans
+import java.util.Locale
 
 private val ProfileInk: Color @Composable get() = MaterialTheme.colorScheme.onBackground
 private val ProfileMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
@@ -188,6 +198,7 @@ fun ProfileScreen(
                             AppTheme.ONE -> "Theme 1 - Classic"
                             AppTheme.TWO -> "Theme 2 - Fresh"
                             AppTheme.THREE -> "Theme 3 - Meadow"
+                            AppTheme.FOUR -> "Theme 4 - Navy & Gold"
                         }
                         Row(Modifier.fillMaxWidth().selectable(
                             selected = AppPreferences.theme == theme,
@@ -221,12 +232,20 @@ fun ProfileScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (experience == LoginExperience.NEW) "New luxury login" else "Current login",
+                                    when (experience) {
+                                        LoginExperience.NEW -> "Dark luxury login"
+                                        LoginExperience.WHITE -> "White luxury login"
+                                        LoginExperience.CURRENT -> "Current login"
+                                    },
                                     fontFamily = DMSans, fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium, color = ProfileInk
                                 )
                                 Text(
-                                    if (experience == LoginExperience.NEW) "Navy and gold GreenGate login" else "Use the existing glass login",
+                                    when (experience) {
+                                        LoginExperience.NEW -> "Navy and gold GreenGate login"
+                                        LoginExperience.WHITE -> "White marble, gold branding and frosted glass"
+                                        LoginExperience.CURRENT -> "Use the existing glass login"
+                                    },
                                     fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted
                                 )
                             }
@@ -267,6 +286,10 @@ fun ProfileScreen(
                     )
                 }
             }
+            Spacer(Modifier.height(24.dp))
+            Text("GREEN BOT VOICE", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
+            Spacer(Modifier.height(8.dp))
+            GreenBotVoiceSetting()
             Spacer(Modifier.height(24.dp))
             Text("SERVER", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
             Spacer(Modifier.height(8.dp))
@@ -346,5 +369,151 @@ private fun IconSetOption(
             Text(subtitle, fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted)
         }
         RadioButton(selected = selected, onClick = onClick, colors = RadioButtonDefaults.colors(selectedColor = ProfileGreen))
+    }
+}
+
+/** Read aloud when a voice is previewed. */
+private const val VoiceSample = "Hi, I'm Green Bot. How can I help you today?"
+
+/** One installed English voice, numbered within its accent, e.g. "English (India) · Voice 2". */
+private class BotVoiceOption(val voice: Voice, val label: String, val needsInternet: Boolean)
+
+/** The phone's installed English voices: its own accent first, one entry per voice. */
+private fun botVoiceOptions(tts: TextToSpeech): List<BotVoiceOption> {
+    val installed = (tts.voices ?: emptySet()).filter {
+        it.locale.language == "en" && TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features.orEmpty()
+    }
+    // Google lists most voices twice, on-device and online. Keep one of each, preferring on-device.
+    val unique = installed.groupBy { it.name.removeSuffix("-local").removeSuffix("-network") }
+        .values.map { copies -> copies.minBy { it.isNetworkConnectionRequired } }
+    val phoneAccent = Locale.getDefault().takeIf { it.language == "en" }?.country
+    return unique.groupBy { it.locale.displayName }.toList()
+        .sortedWith(compareBy({ (_, voices) -> voices.first().locale.country != phoneAccent }, { it.first }))
+        .flatMap { (accent, voices) ->
+            voices.sortedBy { it.name }.mapIndexed { index, voice ->
+                BotVoiceOption(voice, "$accent · Voice ${index + 1}", voice.isNetworkConnectionRequired)
+            }
+        }
+}
+
+/** Plays the sample in [voice], or in the voice Green Bot uses by default when it is null. */
+private fun previewVoice(tts: TextToSpeech, voice: Voice?) {
+    runCatching {
+        tts.stop()
+        if (voice != null) {
+            tts.setVoice(voice)
+        } else {
+            // Same order as Green Bot: the phone's English, then Indian, US and UK English.
+            listOfNotNull(Locale.getDefault().takeIf { it.language == "en" }, Locale.forLanguageTag("en-IN"), Locale.US, Locale.UK)
+                .firstOrNull { tts.setLanguage(it) >= TextToSpeech.LANG_AVAILABLE }
+        }
+        tts.speak(VoiceSample, TextToSpeech.QUEUE_FLUSH, null, "green-bot-voice-preview")
+    }
+}
+
+/** Profile row for Green Bot's voice. The choice is kept on this phone and used the next time Green Bot opens. */
+@Composable
+private fun GreenBotVoiceSetting() {
+    val context = LocalContext.current
+    var engine by remember { mutableStateOf<TextToSpeech?>(null) }
+    // Null while the text-to-speech service starts.
+    var engineReady by remember { mutableStateOf<Boolean?>(null) }
+    DisposableEffect(Unit) {
+        val main = Handler(Looper.getMainLooper())
+        val tts = runCatching {
+            TextToSpeech(context.applicationContext) { status -> main.post { engineReady = status == TextToSpeech.SUCCESS } }
+        }.getOrNull()
+        if (tts == null) engineReady = false
+        engine = tts
+        onDispose { runCatching { tts?.stop(); tts?.shutdown() } }
+    }
+    val options = remember(engine, engineReady) {
+        val tts = engine
+        if (tts == null || engineReady != true) emptyList() else runCatching { botVoiceOptions(tts) }.getOrDefault(emptyList())
+    }
+    // The voice Green Bot will use: the one picked here, else its default; null is the phone's own voice.
+    val inUse = remember(options, AppPreferences.greenBotVoice) {
+        engine?.takeIf { options.isNotEmpty() }?.let { runCatching { greenBotVoiceFor(it) }.getOrNull() }
+    }
+    val selected = options.firstOrNull { it.voice.name == inUse?.name }
+    var choosing by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp), color = ProfileCream, shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.fillMaxWidth()
+                .clickable(enabled = options.isNotEmpty(), role = Role.Button) { choosing = true }
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(ProfileGreen.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.RecordVoiceOver, null, tint = ProfileGreen, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Voice", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = ProfileInk)
+                Text(
+                    when {
+                        engineReady == null -> "Loading voices…"
+                        options.isEmpty() -> "No voices found. Turn on a text-to-speech service in phone settings."
+                        selected == null -> "Phone default"
+                        selected.needsInternet -> "${selected.label} · needs internet"
+                        else -> selected.label
+                    },
+                    fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted
+                )
+            }
+            if (options.isNotEmpty()) Icon(Icons.Rounded.ChevronRight, null, tint = ProfileMuted)
+        }
+    }
+
+    val tts = engine
+    if (choosing && tts != null) {
+        fun close() {
+            runCatching { tts.stop() }
+            choosing = false
+        }
+        AlertDialog(
+            onDismissRequest = ::close,
+            title = { Text("Green Bot voice", fontFamily = DMSans) },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).selectableGroup()) {
+                    VoiceChoice("Phone default", null, selected = selected == null,
+                        onSelect = { AppPreferences.setGreenBotVoice(context, AppPreferences.PhoneDefaultVoice) },
+                        onPlay = { previewVoice(tts, null) })
+                    options.forEach { option ->
+                        VoiceChoice(option.label, if (option.needsInternet) "Needs internet" else null,
+                            selected = option == selected,
+                            onSelect = { AppPreferences.setGreenBotVoice(context, option.voice.name) },
+                            onPlay = { previewVoice(tts, option.voice) })
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = ::close) { Text("Done", fontFamily = DMSans) } }
+        )
+    }
+}
+
+@Composable
+private fun VoiceChoice(label: String, note: String?, selected: Boolean, onSelect: () -> Unit, onPlay: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = ProfileGreen))
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, fontFamily = DMSans, fontSize = 14.sp, color = ProfileInk)
+            note?.let { Text(it, fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted) }
+        }
+        IconButton(onClick = onPlay) {
+            Icon(Icons.Rounded.PlayArrow, "Play sample of $label", tint = ProfileGreen)
+        }
     }
 }

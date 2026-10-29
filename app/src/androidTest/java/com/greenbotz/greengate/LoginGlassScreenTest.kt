@@ -15,6 +15,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.greenbotz.greengate.core.session.LoginExperience
 import com.greenbotz.greengate.ui.screens.auth.LuxuryLoginScreen
 import com.greenbotz.greengate.ui.theme.GreenGateTheme
 import java.io.File
@@ -29,14 +30,20 @@ import org.junit.runner.RunWith
 class LoginGlassScreenTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val automation get() = instrumentation.uiAutomation
+    private var screenshotPrefix = ""
 
-    @Test fun phoneStaysVisibleAboveKeyboardAndCountrySearchKeepsTheNumber() {
+    @Test fun darkLoginKeyboardAndCountryPicker() = verifyTheme(LoginExperience.NEW)
+
+    @Test fun whiteLoginKeyboardAndCountryPicker() = verifyTheme(LoginExperience.WHITE)
+
+    private fun verifyTheme(experience: LoginExperience) {
+        screenshotPrefix = if (experience == LoginExperience.WHITE) "white-" else "dark-"
         val keyguard = instrumentation.targetContext.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         assumeFalse("The test device must be unlocked", keyguard.isKeyguardLocked)
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity {
                 it.enableEdgeToEdge()
-                it.setContent { GreenGateTheme { LuxuryLoginScreen() } }
+                it.setContent { GreenGateTheme { LuxuryLoginScreen(experience) } }
             }
             waitFor { nodes().any { it.text?.contains("Welcome Back") == true } }
             assertTrue(nodes().any { it.text?.contains("Login with QR Code") == true && it.isVisibleToUser })
@@ -90,6 +97,20 @@ class LoginGlassScreenTest {
             click(nodes().first { it.contentDescription?.contains("Close country picker") == true })
             waitFor { nodes().none { it.text?.contains("Choose country") == true } }
             assertTrue(editText().text.toString().contains("81234567"))
+            // The built-in demo number reaches OTP without sending a real SMS.
+            enterText("000000")
+            click(nodes().first { it.text?.toString() == "Continue" })
+            waitFor { nodes().any { it.text?.contains("Verify Your Number") == true } }
+            // AnimatedContent briefly exposes both editors while the old screen slides out.
+            waitFor {
+                val screen = nodes()
+                screen.none { it.text?.contains("Welcome Back") == true } &&
+                    screen.count { it.className == "android.widget.EditText" && it.isEditable } == 1
+            }
+            click(editText())
+            enterText("123")
+            waitFor { editText().text?.contains("123") == true }
+            screenshot("otp-typing")
         }
     }
 
@@ -126,7 +147,7 @@ class LoginGlassScreenTest {
     private fun screenshot(name: String) {
         automation.waitForIdle(250, 5_000)
         val bitmap = automation.takeScreenshot()
-        val file = File(instrumentation.targetContext.getExternalFilesDir(null), "$name.png")
+        val file = File(instrumentation.targetContext.getExternalFilesDir(null), "$screenshotPrefix$name.png")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
     }

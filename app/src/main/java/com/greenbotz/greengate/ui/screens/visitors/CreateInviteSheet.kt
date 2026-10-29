@@ -48,14 +48,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenbotz.greengate.R
 import com.greenbotz.greengate.core.visitor.VisitorInvite
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.ClassicCream
 import com.greenbotz.greengate.ui.screens.facilities.ClassicLine
 import com.greenbotz.greengate.ui.screens.facilities.ClassicMint
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-import com.greenbotz.greengate.ui.screens.facilities.greenButton
 import com.greenbotz.greengate.ui.screens.facilities.themed
+import com.greenbotz.greengate.ui.screens.home.SilkLines
 import com.greenbotz.greengate.ui.theme.DMSans
 import com.greenbotz.greengate.ui.theme.SoftGreen
 import kotlin.math.roundToInt
@@ -65,13 +62,13 @@ internal enum class InviteType(val title: String, val subtitle: String) {
     FAMILY("Family / Friend", "For people you know"),
     DELIVERY("Delivery", "Food, parcel or courier"),
     CAB("Cab", "Pickup or drop-off"),
-    OTHER("Other", "Contractor, technician,\ntutor & more"),
+    OTHER("Other", "Contractor, technician,\nservice & more"),
 }
 
 /**
- * Slides up from the bottom when a resident starts a visitor invite. Family / Friend, Delivery and
- * Cab invites are made right here ([onCreated] gets the saved invite); Other goes to [onSelect].
- * Dragging the sheet down doesn't close it, so a half-filled form isn't lost; use Close or back.
+ * Slides up from the bottom when a resident starts a visitor invite. Every visit type's invite is
+ * made right here ([onCreated] gets the saved invite). Dragging the sheet down doesn't close it,
+ * so a half-filled form isn't lost; use Close or back.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +76,6 @@ internal fun CreateInviteSheet(
     onDismiss: () -> Unit,
     onHistory: (() -> Unit)? = null,
     onCreated: (VisitorInvite) -> Unit,
-    onSelect: (InviteType) -> Unit,
 ) {
     // Vetoing Hidden stops a drag (or scrim tap) from dismissing; hide() below still animates out.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
@@ -96,21 +92,30 @@ internal fun CreateInviteSheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         BackHandler(enabled = form != null) { form = null }
-        AnimatedContent(form, label = "inviteType") { shown ->
-            val onClose = { close(onDismiss) }
-            val created = { invite: VisitorInvite -> close { onCreated(invite) } }
-            val backToTypes = { form = null }
-            when (shown) {
-                InviteType.FAMILY -> FamilyInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
-                InviteType.DELIVERY -> DeliveryInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
-                InviteType.CAB -> CabInviteForm(onClose = onClose, onCreated = created)
-                else -> InviteTypes(onHistory?.let { { close(it) } }, onClose = onClose) { type ->
-                    // TODO: make Other in the sheet too once its form is designed.
-                    if (type == InviteType.OTHER) close { onSelect(type) } else form = type
+        Box {
+            // Theme 4's silk lines sweep across the top of the sheet, from behind the drag handle.
+            if (NavyGoldInvites) SilkLines(Modifier.offset(y = (-34).dp).fillMaxWidth().height(240.dp))
+            AnimatedContent(form, label = "inviteType") { shown ->
+                val onClose = { close(onDismiss) }
+                val created = { invite: VisitorInvite -> close { onCreated(invite) } }
+                val backToTypes = { form = null }
+                when (shown) {
+                    InviteType.FAMILY -> FamilyInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
+                    InviteType.DELIVERY -> DeliveryInviteForm(onBack = backToTypes, onClose = onClose, onCreated = created)
+                    InviteType.CAB -> CabInviteForm(onClose = onClose, onCreated = created)
+                    InviteType.OTHER -> OtherInviteForm(onClose = onClose, onCreated = created)
+                    null -> InviteTypes(onHistory?.let { { close(it) } }, onClose = onClose) { form = it }
                 }
             }
         }
     }
+}
+
+/** A visit type's art beside an invite form's title: on its soft circle in Theme 4. */
+@Composable
+internal fun InviteHeaderArt(type: InviteType) {
+    if (NavyGoldInvites) NavyGoldArtCircle(type.art(), 58.dp)
+    else InviteTypeArt(type, Modifier.requiredSize(72.dp), blend = false)
 }
 
 /** Top of an invite form in the sheet, laid out like Invite Cab's; [onBack] adds a back arrow, a null title, subtitle or art is left out. */
@@ -121,7 +126,7 @@ internal fun InviteFormHeader(
     Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = FacilityInk, modifier = Modifier.size(24.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = InviteInk, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(4.dp))
         }
@@ -130,22 +135,22 @@ internal fun InviteFormHeader(
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
-            if (title != null) Text(title, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-            if (subtitle != null) Text(subtitle, fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+            if (title != null) Text(title, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = InviteInk)
+            if (subtitle != null) Text(subtitle, fontFamily = DMSans, fontSize = 13.sp, color = InviteMuted)
         }
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
+            Icon(Icons.Rounded.Close, "Close", tint = InviteInk, modifier = Modifier.size(24.dp))
         }
     }
 }
 
-/** The green button pinned under an invite form in the sheet. */
+/** The primary button pinned under an invite form in the sheet: green, or navy in Theme 4. */
 @Composable
 internal fun InviteFormButton(label: String, onClick: () -> Unit) {
     Box(
         Modifier.padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 20.dp).fillMaxWidth().height(54.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(greenButton(Color(0xFF2E9A79)))
+            .background(inviteButton(Color(0xFF2E9A79)))
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -155,29 +160,33 @@ internal fun InviteFormButton(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun InviteTypes(onHistory: (() -> Unit)?, onClose: () -> Unit, onSelect: (InviteType) -> Unit) {
+    val navyGold = NavyGoldInvites
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Create Visitor Invite", Modifier.weight(1f), fontFamily = DMSans, fontSize = 22.sp,
-                fontWeight = FontWeight.Bold, color = FacilityInk)
+            Text("Create Visitor Invite", Modifier.weight(1f), fontFamily = DMSans, fontSize = if (navyGold) 25.sp else 22.sp,
+                fontWeight = FontWeight.Bold, color = InviteInk)
             Box(
                 Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClose),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.Close, "Close", tint = FacilityInk, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.Close, "Close", tint = InviteInk, modifier = Modifier.size(if (navyGold) 26.dp else 24.dp))
             }
         }
-        Text("Who are you inviting?", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted)
+        Text("Who are you inviting?", fontFamily = DMSans, fontSize = if (navyGold) 16.sp else 15.sp, color = InviteMuted)
         Spacer(Modifier.height(18.dp))
         InviteType.entries.chunked(2).forEach { row ->
-            Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Theme 4's cards share their row's height, as Other's subtitle runs to two lines.
+            Row(Modifier.padding(bottom = 14.dp).then(if (navyGold) Modifier.height(IntrinsicSize.Max) else Modifier),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 row.forEach { type ->
-                    InviteTypeCard(type, Modifier.weight(1f)) { onSelect(type) }
+                    if (navyGold) NavyGoldTypeCard(type, Modifier.weight(1f).fillMaxHeight()) { onSelect(type) }
+                    else InviteTypeCard(type, Modifier.weight(1f)) { onSelect(type) }
                 }
             }
         }
         if (onHistory != null) {
             Spacer(Modifier.height(4.dp))
-            HistoryBar(onHistory)
+            if (navyGold) NavyGoldHistoryBar(onHistory) else HistoryBar(onHistory)
         }
     }
 }
@@ -195,14 +204,14 @@ private fun HistoryBar(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(38.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.History, null, tint = BookingsDeepGreen, modifier = Modifier.size(22.dp))
+            Icon(Icons.Rounded.History, null, tint = InviteDeep, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Visitor History", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-            Text("Active, upcoming and past invites", fontFamily = DMSans, fontSize = 12.sp, color = FacilityMuted)
+            Text("Visitor History", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = InviteInk)
+            Text("Active, upcoming and past invites", fontFamily = DMSans, fontSize = 12.sp, color = InviteMuted)
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = FacilityInk, modifier = Modifier.size(24.dp))
+        Icon(Icons.Rounded.ChevronRight, null, tint = InviteInk, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -223,14 +232,20 @@ private fun InviteTypeCard(type: InviteType, modifier: Modifier, onClick: () -> 
             InviteTypeArt(type, Modifier.requiredSize(112.dp))
         }
         Spacer(Modifier.height(10.dp))
-        Text(type.title, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
+        Text(type.title, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = InviteInk)
         Spacer(Modifier.height(2.dp))
-        Text(type.subtitle, fontFamily = DMSans, fontSize = 12.sp, lineHeight = 16.sp, color = FacilityMuted, textAlign = TextAlign.Center)
+        Text(type.subtitle, fontFamily = DMSans, fontSize = 12.sp, lineHeight = 16.sp, color = InviteMuted, textAlign = TextAlign.Center)
     }
 }
 
+/** A visit type's 3D art; Theme 4 has its own navy and gold set, cut out on transparency. */
 @DrawableRes
-private fun InviteType.art() = when (this) {
+internal fun InviteType.art() = if (NavyGoldInvites) when (this) {
+    InviteType.FAMILY -> R.drawable.theme4_invite_family
+    InviteType.DELIVERY -> R.drawable.theme4_invite_delivery
+    InviteType.CAB -> R.drawable.theme4_invite_cab
+    InviteType.OTHER -> R.drawable.theme4_invite_other
+} else when (this) {
     InviteType.FAMILY -> R.drawable.invite_family
     InviteType.DELIVERY -> R.drawable.invite_delivery
     InviteType.CAB -> R.drawable.invite_cab
@@ -241,10 +256,11 @@ private fun InviteType.art() = when (this) {
  * A visit type's 3D art. It's rendered on white, so by default it's multiplied into whatever is behind
  * it and the white drops out over a tinted backdrop. [blend] = false draws it as is, for the white
  * sheet: there it may sit inside a fading layer, where multiplying has nothing beneath it to blend with.
+ * Theme 4's art is already transparent, so it's always drawn as is.
  */
 @Composable
 internal fun InviteTypeArt(type: InviteType, modifier: Modifier, blend: Boolean = true) {
-    if (!blend) {
+    if (!blend || NavyGoldInvites) {
         Image(painterResource(type.art()), null, modifier)
         return
     }

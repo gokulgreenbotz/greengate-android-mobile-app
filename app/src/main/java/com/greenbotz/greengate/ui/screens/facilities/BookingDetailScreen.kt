@@ -76,7 +76,7 @@ internal fun BookingDetailScreen(navController: NavController, booking: Booking)
         dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep it", fontFamily = DMSans) } }
     )
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    BookingsScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar(
                 "Booking Details",

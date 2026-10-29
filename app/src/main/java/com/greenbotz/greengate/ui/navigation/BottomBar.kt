@@ -37,6 +37,7 @@ import com.greenbotz.greengate.ui.screens.home.MarinaArt
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
 import com.greenbotz.greengate.ui.screens.home.MarinaCream
 import com.greenbotz.greengate.ui.screens.home.NavItem
+import com.greenbotz.greengate.ui.screens.home.ThemeFourBottomNavigation
 import com.greenbotz.greengate.ui.screens.home.ThemeThreeBottomNavigation
 import com.greenbotz.greengate.ui.screens.home.ThemeTwoBottomNavigation
 import com.greenbotz.greengate.ui.screens.home.ThemeZeroBottomNavigation
@@ -53,6 +54,10 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
     }
     if (AppPreferences.theme == AppTheme.THREE) {
         ThemeThreeBottomNavigation(navController, currentRoute)
+        return
+    }
+    if (AppPreferences.theme == AppTheme.FOUR) {
+        ThemeFourBottomNavigation(navController, currentRoute)
         return
     }
     fun navigate(route: String) {

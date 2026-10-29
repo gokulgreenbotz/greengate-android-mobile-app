@@ -101,13 +101,18 @@ import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
 import com.greenbotz.greengate.ui.theme.DMSans
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Keep secondary text readable over the pale mint glass without changing its theme hue.
 private val BotSecondaryText: Color
     @Composable get() = MaterialTheme.colorScheme.let { lerp(it.onSurfaceVariant, it.onSurface, .12f) }
 
 private enum class BotPanel { INTRO, CHAT, VOICE }
+
+/** How long the concierge waits for its opening greeting to start before listening anyway. */
+private const val GreetingStartTimeoutMs = 5_000L
 
 /** The reference-style assistant lives behind the original home card. */
 @Composable
@@ -135,7 +140,8 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
     val claudeOn = ResidentSession.greenBotOnline
     LaunchedEffect(Unit) { ResidentSession.checkGreenBot() }
     var revealedQuestions by rememberSaveable { mutableIntStateOf(questions.size) }
-    var voiceMode by rememberSaveable { mutableStateOf(false) }
+    // Theme 4 opens on its voice concierge (see below); the other themes open on chat.
+    var voiceMode by rememberSaveable { mutableStateOf(AppPreferences.theme == AppTheme.FOUR) }
     var permissionError by remember { mutableStateOf<String?>(null) }
     var pendingSpokenReply by remember { mutableStateOf<String?>(null) }
     var spokenReplyIndex by remember { mutableIntStateOf(-1) }
@@ -337,6 +343,70 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
             containerColor = colors.surface.copy(alpha = 1f),
             shape = RoundedCornerShape(28.dp)
         )
+    }
+
+    // Theme 4 - Navy & Gold has its own voice screen; "Type instead" switches to the chat below.
+    if (AppPreferences.theme == AppTheme.FOUR && voiceMode) {
+        // Opening the screen (the AI Chat button) greets the resident, then turns the microphone on, once.
+        var autoListened by rememberSaveable { mutableStateOf(false) }
+        var greeting by remember { mutableStateOf<ConciergeGreeting?>(null) }
+        LaunchedEffect(Unit) {
+            if (!autoListened) {
+                autoListened = true
+                if (voiceAllowed) {
+                    val hello = conciergeGreeting()
+                    greeting = hello
+                    voice.speak(hello.spoken)
+                    // Wait for it to start (the voice service may still be loading), then to end.
+                    // Without a voice service it never starts, and listening begins after the wait.
+                    val started = withTimeoutOrNull(GreetingStartTimeoutMs) {
+                        snapshotFlow { voice.isSpeaking }.first { it }
+                    } != null
+                    if (started) snapshotFlow { voice.isSpeaking }.first { !it }
+                    greeting = null
+                }
+                // Unless the resident already tapped the microphone or a suggestion during the greeting.
+                if (questions.isEmpty() && !voice.isListening && !voice.isProcessing) toggleMicrophone()
+            }
+        }
+        val last = questions.lastIndex
+        GreenBotConcierge(
+            listening = voice.isListening,
+            processing = voice.isProcessing || waitingForReply,
+            speaking = voice.isSpeaking,
+            level = voice.level,
+            partialText = voice.partialText,
+            question = questions.lastOrNull(),
+            reply = replyAt(last),
+            replySpeaking = voice.isSpeaking && spokenReplyIndex == last,
+            greeting = greeting?.takeIf { questions.isEmpty() },
+            error = permissionError ?: voice.error,
+            replyMuted = voice.replyMuted,
+            privacyNotice = claudeOn,
+            voiceAllowed = voiceAllowed,
+            canReset = questions.isNotEmpty(),
+            snackbar = snackbar,
+            onBack = ::goBack,
+            onMicrophone = ::toggleMicrophone,
+            onStop = { pendingSpokenReply = null; voice.cancel() },
+            onTypeInstead = { selectMode(false) },
+            onPrompt = ::sendQuestion,
+            onAction = ::openAction,
+            onCopy = ::copyReply,
+            onRead = { replyAt(last)?.let { readReply(last, it.text) } },
+            onReset = { voice.cancel(); pendingSpokenReply = null; showResetDialog = true },
+            onDismissError = { permissionError = null; voice.clearError() },
+            onTurnUpVolume = voice::turnUpVolume,
+            onOpenSettings = if (permissionError != null) ({
+                voice.cancel()
+                pendingSpokenReply = null
+                context.startActivity(Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + context.packageName)
+                ))
+            }) else null
+        )
+        return
     }
 
     Box(
@@ -707,7 +777,7 @@ private fun BotVoiceControls(
 }
 
 @Composable
-private fun BotVoiceReply(
+internal fun BotVoiceReply(
     question: String, reply: GreenBotReply?, onAction: (GreenBotAction) -> Unit,
     onCopy: (String) -> Unit, speaking: Boolean, onRead: () -> Unit
 ) {

@@ -86,7 +86,7 @@ internal fun CountryPickerDialog(
         }
         // Align the glass sample with the same full-screen artwork as the login page.
         // Only the safe-area container moves for the IME; the backdrop remains fixed.
-        val artwork = ImageBitmap.imageResource(R.drawable.login_bg_luxury)
+        val artwork = ImageBitmap.imageResource(LocalLoginPalette.current.artwork)
         var viewportSize by remember { mutableStateOf(IntSize.Zero) }
         var viewportOrigin by remember { mutableStateOf(Offset.Zero) }
         Box(

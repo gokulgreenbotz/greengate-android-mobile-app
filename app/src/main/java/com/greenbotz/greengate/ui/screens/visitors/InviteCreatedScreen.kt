@@ -49,13 +49,6 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.ui.navigation.Screen
-import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
-import com.greenbotz.greengate.ui.screens.facilities.GlassCard
-import com.greenbotz.greengate.ui.screens.facilities.GlassTopBar
-import com.greenbotz.greengate.ui.screens.facilities.QrPass
-import com.greenbotz.greengate.ui.screens.facilities.greenButton
 import com.greenbotz.greengate.ui.theme.DMSans
 import java.io.File
 import kotlin.math.cos
@@ -78,9 +71,9 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
         navController.navigate(Screen.Visitors.route) { popUpTo(Screen.Home.route) }
     }
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    InviteScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
-            GlassTopBar("", onBack = { navController.popBackStack() })
+            InviteTopBar("", onBack = { navController.popBackStack() })
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -88,7 +81,8 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
                 Box(Modifier.size(150.dp, 110.dp), contentAlignment = Alignment.Center) {
                     // Confetti dots burst outward as the tick pops in.
                     Canvas(Modifier.fillMaxSize()) {
-                        val colors = listOf(Color(0xFF4CC38A), Color(0xFFF2B33D), Color(0xFF5BA4F5), Color(0xFFB08AF0), Color(0xFFF07D6A))
+                        val colors = if (NavyGoldInvites) ConfettiNavyGold
+                            else listOf(Color(0xFF4CC38A), Color(0xFFF2B33D), Color(0xFF5BA4F5), Color(0xFFB08AF0), Color(0xFFF07D6A))
                         repeat(12) { i ->
                             val angle = i * (Math.PI * 2 / 12) + .3
                             val r = (34 + 34 * pop.value).dp.toPx()
@@ -98,34 +92,34 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
                     }
                     Box(
                         Modifier.size(78.dp).scale(pop.value).shadow(10.dp, CircleShape).clip(CircleShape)
-                            .background(greenButton(Color(0xFF2AA07D))),
+                            .background(inviteButton(Color(0xFF2AA07D))),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(44.dp)) }
                 }
-                Text("Invite Created!", fontFamily = DMSans, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = FacilityInk)
-                Text("Share the invite with your visitor", fontFamily = DMSans, fontSize = 15.sp, color = FacilityMuted)
+                Text("Invite Created!", fontFamily = DMSans, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = InviteInk)
+                Text("Share the invite with your visitor", fontFamily = DMSans, fontSize = 15.sp, color = InviteMuted)
                 Spacer(Modifier.height(16.dp))
-                QrPass(invite.qrContent(), invite.id)
+                InviteQrPass(invite.qrContent(), invite.id)
                 Spacer(Modifier.height(8.dp))
-                Text("ID: ${invite.id}", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = FacilityInk)
-                Text("${invite.name} · ${invite.whenLabel()}", fontFamily = DMSans, fontSize = 13.sp, color = FacilityMuted)
+                Text("ID: ${invite.id}", fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = InviteInk)
+                Text("${invite.name} · ${invite.whenLabel()}", fontFamily = DMSans, fontSize = 13.sp, color = InviteMuted)
                 Spacer(Modifier.height(16.dp))
                 ShareRow(Icons.Outlined.Share, "Share via WhatsApp", Color(0xFF25D366)) { shareToWhatsApp(context, invite) }
                 Spacer(Modifier.height(10.dp))
-                ShareRow(Icons.Outlined.Link, "Copy Link", FacilityInk) {
+                ShareRow(Icons.Outlined.Link, "Copy Link", InviteInk) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Invite link", inviteLink(invite)))
                     Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
                 }
                 Spacer(Modifier.height(10.dp))
-                ShareRow(Icons.Outlined.Download, "Download Pass", FacilityInk) { savePass(context, invite) }
+                ShareRow(Icons.Outlined.Download, "Download Pass", InviteInk) { savePass(context, invite) }
                 Spacer(Modifier.height(16.dp))
             }
             Box(
                 Modifier.padding(16.dp).fillMaxWidth().height(56.dp)
-                    .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x330F6B54), spotColor = Color(0x330F6B54))
+                    .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = InviteButtonShadow, spotColor = InviteButtonShadow)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(greenButton(Color(0xFF1D8A6A)))
+                    .background(inviteButton(Color(0xFF1D8A6A)))
                     .clickableButton { done() },
                 contentAlignment = Alignment.Center
             ) { Text("Done", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
@@ -133,16 +127,19 @@ internal fun InviteCreatedScreen(navController: NavController, invite: VisitorIn
     }
 }
 
+// Theme 4's confetti: golds and navies.
+private val ConfettiNavyGold = listOf(Color(0xFFD9A54A), Color(0xFF1F437B), Color(0xFFE9C27F), Color(0xFF5B7FC4), Color(0xFFB9852F))
+
 private fun Modifier.clickableButton(onClick: () -> Unit) =
     this.then(Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick))
 
 @Composable
 private fun ShareRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color, onClick: () -> Unit) {
-    GlassCard(Modifier.clickableButton(onClick), padding = 14.dp) {
+    InviteCard(padding = 14.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(16.dp))
-            Text(label, fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+            Text(label, fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = InviteInk)
         }
     }
 }
@@ -196,7 +193,7 @@ private fun renderPass(invite: VisitorInvite): Bitmap {
     val cell = qrSize / matrix.width
     val left = (width - qrSize) / 2
     val top = 150f
-    val ink = Paint().apply { color = 0xFF0B3B31.toInt() }
+    val ink = Paint().apply { color = if (NavyGoldInvites) 0xFF0B1446.toInt() else 0xFF0B3B31.toInt() }
     for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
         if (matrix[x, y]) canvas.drawRect(left + x * cell, top + y * cell, left + (x + 1) * cell, top + (y + 1) * cell, ink)
     }

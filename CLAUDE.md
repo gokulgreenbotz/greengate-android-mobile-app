@@ -16,4 +16,4 @@ Gradle needs JDK 17+. If the default JVM is older, set `JAVA_HOME` to Android St
 2. **Never commit other secrets:** Firebase service-account JSON, `keystore`/`*.jks`, `local.properties`, signing passwords, and API keys for Twilio, Vonage or any other provider. Service-account keys belong to the backend only, never to this app.
 3. **Don't hard-code credentials in source.** `SharedCallConfig.kt` already carries call-provider values. Don't add more; move them to untracked config instead.
 4. **Resident data is personal data (PDPA).** Don't log phone numbers, names, tokens or FCM tokens (`Log.*`, crash reports).
-5. **Cleartext HTTP is allowed only for `10.0.2.2`** (the Local dev server), through `network_security_config.xml`. Don't widen it.
+5. **Cleartext HTTP is allowed only for `127.0.0.1`** (the Local dev server, reached with `adb reverse tcp:5176 tcp:5176`), through `network_security_config.xml`. Don't widen it.

@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.navigation.NavBackStackEntry
+import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.AppTheme
 
 // Package stays com.greenbotz.greengate until the project-wide
 // "Package name does not match containing directory" fix moves it to ui.navigation.
@@ -34,3 +36,26 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPopIn() =
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.bookingPopOut() =
     slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, bookingSpec())
+
+// Bottom-bar tabs sit side by side, so switching slides the whole page across toward the tab
+// tapped, like turning a page; the bar's highlight glides on the same curve. Slides only, as above.
+internal const val TabSlideMillis = 380
+
+/** A tab's place in the current theme's bar, left to right. */
+private fun tabIndex(route: String?) = (
+    if (AppPreferences.theme == AppTheme.FOUR) listOf(Screen.Home.route, Screen.Access.route, Screen.Community.route, Screen.Profile.route)
+    else listOf(Screen.Home.route, Screen.Community.route, Screen.Services.route, Screen.Access.route, Screen.Announcements.route, Screen.Profile.route)
+).indexOf(route)
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.betweenTabs() =
+    isMainTab(initialState.destination.route) && isMainTab(targetState.destination.route)
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabDirection() =
+    if (tabIndex(targetState.destination.route) > tabIndex(initialState.destination.route)) AnimatedContentTransitionScope.SlideDirection.Start
+    else AnimatedContentTransitionScope.SlideDirection.End
+
+private fun <T> tabSpec() = tween<T>(TabSlideMillis, easing = FastOutSlowInEasing)
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.tabSlideIn() = slideIntoContainer(tabDirection(), tabSpec())
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.tabSlideOut() = slideOutOfContainer(tabDirection(), tabSpec())

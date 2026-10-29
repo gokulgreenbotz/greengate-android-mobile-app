@@ -24,6 +24,10 @@ private val ChampagneHighlight = Color(0xFFF4D19B)
 
 @Composable
 fun GreenGateLoginBranding(modifier: Modifier = Modifier) {
+    if (LocalLoginPalette.current.light) {
+        WhiteLoginBranding(modifier)
+        return
+    }
     Column(modifier, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
         GlowingLoginAsset(
             painter = painterResource(R.drawable.greengate_brand_lockup),

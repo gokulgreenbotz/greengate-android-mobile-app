@@ -88,10 +88,7 @@ internal fun ThemeZeroHomeScreen(navController: NavController) {
         onDismiss = { showInvite = false },
         onHistory = { showInvite = false; navController.navigate(Screen.Visitors.route) },
         onCreated = { showInvite = false; navController.navigate(Screen.InviteCreated.create(it.id)) }
-    ) { type ->
-        showInvite = false
-        navController.navigate(Screen.CreateInvite.create(type))
-    }
+    )
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val scale = minOf(maxWidth.value, 600f) / 426f
         // The header takes the top 20% of the screen; the cards start right below it.

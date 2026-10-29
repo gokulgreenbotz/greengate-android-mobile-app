@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     if (showLoginPromo) {
                         IntroVideoScreen(onFinished = { showLoginPromo = false })
-                    } else if (AppPreferences.loginExperience == com.greenbotz.greengate.core.session.LoginExperience.NEW) {
+                    } else if (AppPreferences.loginExperience != com.greenbotz.greengate.core.session.LoginExperience.CURRENT) {
                         LuxuryLoginScreen()
                     } else {
                         LoginScreen()

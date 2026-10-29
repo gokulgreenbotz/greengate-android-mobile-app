@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -57,27 +58,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.AppPreferences
+import com.greenbotz.greengate.core.session.LoginExperience
 import com.greenbotz.greengate.core.session.ResidentApiException
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.PlayfairDisplay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Shared with OtpVerificationScreen.
 internal val Navy = Color(0xFF061A2E)
-internal val Panel = Color(0xE80A2036)
-internal val Gold = Color(0xFFE7C26A)
-internal val GoldLight = Color(0xFFFFDFA1)
-internal val Ivory = Color(0xFFFFF8E8)
-internal val Muted = Color(0xFFB7C3D0)
-internal val Stroke = Color(0xFF6C87A5)
 
 // Same slide as the booking flow (NavTransitions.kt).
 private const val StepSlideMillis = 380
 
+// How long the full code stays on screen before signing in on its own.
+private const val FullCodePauseMillis = 400L
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun LuxuryLoginScreen() {
+fun LuxuryLoginScreen(experience: LoginExperience = AppPreferences.loginExperience) {
+    LoginAppearance(experience) { LuxuryLoginContent() }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun LuxuryLoginContent() {
     var mobile by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
@@ -106,10 +112,11 @@ fun LuxuryLoginScreen() {
         CountryCatalog.all.firstOrNull { it.iso2 == selectedCountryIso2 } ?: CountryCatalog.singapore
     }
 
-    DisposableEffect(activity) {
+    val palette = LocalLoginPalette.current
+    DisposableEffect(activity, palette.light) {
         val controller = activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView) }
-        controller?.isAppearanceLightStatusBars = false
-        controller?.isAppearanceLightNavigationBars = false
+        controller?.isAppearanceLightStatusBars = palette.light
+        controller?.isAppearanceLightNavigationBars = palette.light
         onDispose {
             controller?.isAppearanceLightStatusBars = true
             controller?.isAppearanceLightNavigationBars = true
@@ -169,6 +176,16 @@ fun LuxuryLoginScreen() {
         }
     }
 
+    // Signs in once the last digit is in, after a short pause so the whole code shows first.
+    // Skipped if a digit is deleted during the pause.
+    fun autoSubmit() = scope.launch {
+        if (busy) return@launch
+        busy = true
+        delay(FullCodePauseMillis)
+        busy = false
+        if (code.length == OtpLength) submit()
+    }
+
     fun resendCode() {
         scope.launch {
             busy = true
@@ -217,8 +234,8 @@ fun LuxuryLoginScreen() {
                 onCodeChange = {
                     code = it
                     message = null
-                    // Sign in as soon as the last digit is in (typed, pasted or autofilled).
-                    if (it.length == OtpLength) submit()
+                    // Sign in once the last digit is in (typed, pasted or autofilled).
+                    if (it.length == OtpLength) autoSubmit()
                 },
                 message = message,
                 busy = busy,
@@ -251,8 +268,8 @@ fun LuxuryLoginScreen() {
                                 Text(
                                     "Welcome Back",
                                     color = Ivory,
-                                    fontFamily = DMSans,
-                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = if (palette.light) PlayfairDisplay else DMSans,
+                                    fontWeight = if (palette.light) FontWeight.Normal else FontWeight.Medium,
                                     fontSize = 25.sp,
                                     lineHeight = 32.sp,
                                     textAlign = TextAlign.Center
@@ -318,7 +335,10 @@ fun LuxuryLoginScreen() {
                                         .padding(horizontal = 18.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Image(painterResource(R.drawable.ic_qr_login), null, Modifier.size(23.dp))
+                                    Image(
+                                        painterResource(R.drawable.ic_qr_login), null, Modifier.size(23.dp),
+                                        colorFilter = if (palette.light) ColorFilter.tint(Gold) else null
+                                    )
                                     Text(
                                         "Login with QR Code", color = Ivory, fontFamily = DMSans,
                                         fontSize = 14.sp, modifier = Modifier.padding(start = 14.dp).weight(1f)
@@ -354,11 +374,12 @@ fun LuxuryLoginScreen() {
 /** Artwork and GreenGate branding behind both sign-in screens. */
 @Composable
 internal fun LuxuryLoginBackdrop(showBranding: Boolean = true, content: @Composable BoxScope.() -> Unit) {
-    val backdrop = ImageBitmap.imageResource(R.drawable.login_bg_luxury)
+    val palette = LocalLoginPalette.current
+    val backdrop = ImageBitmap.imageResource(palette.artwork)
     var backdropSize by remember { mutableStateOf(IntSize.Zero) }
     var backdropOrigin by remember { mutableStateOf(Offset.Zero) }
     Box(
-        Modifier.fillMaxSize().background(Navy)
+        Modifier.fillMaxSize().background(palette.background)
             .onSizeChanged { backdropSize = it }
             .onGloballyPositioned { backdropOrigin = it.positionInRoot() }
     ) {
@@ -445,7 +466,7 @@ private fun LoginInput(
                 }
                 Box(Modifier.padding(horizontal = 12.dp).width(1.dp).height(22.dp).background(Stroke.copy(alpha = .55f)))
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text(placeholder, color = Color(0xFF91A8C0), fontFamily = DMSans, fontSize = 15.sp, maxLines = 1)
+                    if (value.isEmpty()) Text(placeholder, color = Muted, fontFamily = DMSans, fontSize = 15.sp, maxLines = 1)
                     innerTextField()
                 }
             }

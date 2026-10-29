@@ -43,7 +43,6 @@ import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,12 +59,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.greenbotz.greengate.R
+import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldButton
+import com.greenbotz.greengate.ui.theme.NavyGoldGold
+import com.greenbotz.greengate.ui.theme.NavyGoldPage
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 
 /** A labelled spot on the site map, as fractions of its width and height; the label sits at [labelX], [labelY]. */
 internal class MapPin(val label: String, val x: Float, val y: Float, val labelX: Float, val labelY: Float)
@@ -94,7 +99,9 @@ internal class FacilityInfo(
 private const val SiteMapAspect = 1120f / 1660f
 private val PinPurple = Color(0xFFB45FD8)
 private val PinRed = Color(0xFFE5262B)
-private val SheetColor = Color(0xFFF1F8F6)
+// Theme 4 - Navy & Gold: a warm white sheet, a navy button and a gold gallery accent.
+private val SheetColor get() = if (NavyGoldTheme) NavyGoldPage else Color(0xFFF1F8F6)
+private val ViewerAccent get() = if (NavyGoldTheme) NavyGoldGold else Color(0xFF5CC8C8)
 private val HeroHeight = 300.dp
 private val SheetOverlap = 28.dp
 
@@ -228,8 +235,9 @@ internal fun FacilityAboutScreen(navController: NavController, facility: Facilit
     val info = remember(facility.id) { facility.info() }
     val heroIndex = remember(info) { info.gallery.indexOfFirst { it is GalleryItem.Photo }.coerceAtLeast(0) }
     var viewerPage by remember { mutableStateOf<Int?>(null) }
-    // TODO: persist favourites once residents have a profile store.
-    var favourite by rememberSaveable(facility.id) { mutableStateOf(false) }
+    val context = LocalContext.current
+    // Hearted facilities are pinned to the top of Book Facility.
+    val favourite = facility.id in AppPreferences.favouriteFacilities
     viewerPage?.let { GalleryViewer(info.gallery, it) { viewerPage = null } }
 
     Box(Modifier.fillMaxSize().background(SheetColor), contentAlignment = Alignment.TopCenter) {
@@ -238,7 +246,7 @@ internal fun FacilityAboutScreen(navController: NavController, facility: Facilit
                 Hero(
                     info.gallery[heroIndex], favourite,
                     onBack = { navController.popBackStack() },
-                    onFavourite = { favourite = !favourite },
+                    onFavourite = { AppPreferences.toggleFavouriteFacility(context, facility.id) },
                     onOpen = { viewerPage = heroIndex },
                 )
                 Column(
@@ -424,7 +432,7 @@ private fun SelectDateButton(onClick: () -> Unit) {
     Box(
         Modifier.background(SheetColor).padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(56.dp)
             .shadow(6.dp, RoundedCornerShape(28.dp), spotColor = BookingsDeepGreen).clip(RoundedCornerShape(28.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
+            .background(if (NavyGoldTheme) NavyGoldButton else Brush.verticalGradient(listOf(Color(0xFF2E9A79), BookingsDeepGreen)))
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -529,11 +537,11 @@ private fun GalleryViewer(gallery: List<GalleryItem>, startPage: Int, onClose: (
                 Modifier.align(Alignment.TopEnd).padding(12.dp).size(48.dp).clip(CircleShape)
                     .clickable(role = Role.Button, onClick = onClose),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.Close, "Close", tint = Color(0xFF5CC8C8), modifier = Modifier.size(34.dp)) }
+            ) { Icon(Icons.Rounded.Close, "Close", tint = ViewerAccent, modifier = Modifier.size(34.dp)) }
             if (gallery.size > 1) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 repeat(gallery.size) { i ->
                     Box(Modifier.size(10.dp).clip(CircleShape)
-                        .background(if (i == pager.currentPage) Color(0xFF5CC8C8) else Color(0xFF808080)))
+                        .background(if (i == pager.currentPage) ViewerAccent else Color(0xFF808080)))
                 }
             }
         }

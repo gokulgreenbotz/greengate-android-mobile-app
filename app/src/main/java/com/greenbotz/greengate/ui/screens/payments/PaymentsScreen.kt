@@ -45,7 +45,6 @@ import com.greenbotz.greengate.core.facility.money
 import com.greenbotz.greengate.core.facility.transactionsOf
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.screens.facilities.ArtworkTile
-import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDivider
 import com.greenbotz.greengate.ui.screens.facilities.FacilityGlassBorder
@@ -60,7 +59,11 @@ import com.greenbotz.greengate.ui.screens.facilities.StatusPill
 import com.greenbotz.greengate.ui.screens.facilities.greenTone
 import com.greenbotz.greengate.ui.screens.facilities.hourLabel
 import com.greenbotz.greengate.ui.screens.facilities.orangeTone
+import com.greenbotz.greengate.ui.screens.facilities.BookingsScreen
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldButton
+import com.greenbotz.greengate.ui.theme.NavyGoldShadow
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 
 private enum class TransactionFilter(val label: String, val kind: TransactionKind?) {
     ALL("All", null), PAYMENTS("Payments", TransactionKind.PAYMENT),
@@ -108,7 +111,7 @@ internal fun PaymentsScreen(navController: NavController) {
     val shown = all.filter { filter.kind == null || it.kind == filter.kind }.let { if (oldestFirst) it.reversed() else it }
     val groups = shown.groupBy { dayHeaderLabel(it.at) }
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    BookingsScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar(
                 "Payments & Deposits",
@@ -188,7 +191,7 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Box(
         Modifier.height(40.dp).clip(shape)
-            .background(if (selected) BookingsDeepGreen else Color(0xB3FFFFFF))
+            .background(if (selected) BookingsDeepGreen else if (NavyGoldTheme) Color.White else Color(0xB3FFFFFF))
             .border(1.dp, if (selected) BookingsDeepGreen else FacilityGlassBorder, shape)
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(horizontal = 20.dp),
@@ -256,15 +259,11 @@ private fun TransactionRow(t: Transaction, onClick: () -> Unit) {
 
 @Composable
 internal fun TransactionDetailScreen(navController: NavController, t: Transaction) {
+    // Theme 4: refunds and payments get the navy button fill rather than green.
+    val settled = if (NavyGoldTheme) NavyGoldButton else Brush.linearGradient(listOf(Color(0xFF2AA07D), BookingsDeepGreen))
     val (title, icon, iconBrush) = when (t.kind) {
-        TransactionKind.REFUND -> Triple("Refund Received", Icons.Rounded.Autorenew,
-            Brush.linearGradient(listOf(Color(0xFF2AA07D),
-                BookingsDeepGreen
-            )))
-        TransactionKind.PAYMENT -> Triple("Payment Made", Icons.Outlined.Payments,
-            Brush.linearGradient(listOf(Color(0xFF2AA07D),
-                BookingsDeepGreen
-            )))
+        TransactionKind.REFUND -> Triple("Refund Received", Icons.Rounded.Autorenew, settled)
+        TransactionKind.PAYMENT -> Triple("Payment Made", Icons.Outlined.Payments, settled)
         TransactionKind.DEPOSIT -> Triple("Deposit Held", Icons.Outlined.Lock,
             Brush.linearGradient(listOf(Color(0xFFF29A55),
                 FacilityOrange
@@ -281,7 +280,7 @@ internal fun TransactionDetailScreen(navController: NavController, t: Transactio
             else "Booking fee for this slot."
         TransactionKind.DEPOSIT -> "Held until the booking ends, then refunded subject to facility terms and no damages."
     }
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    BookingsScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar(
                 "Transaction Details",
@@ -296,8 +295,8 @@ internal fun TransactionDetailScreen(navController: NavController, t: Transactio
                             Modifier.size(84.dp).shadow(
                                 10.dp,
                                 CircleShape,
-                                ambientColor = Color(0x552AA07D),
-                                spotColor = Color(0x552AA07D)
+                                ambientColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x552AA07D),
+                                spotColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x552AA07D)
                             )
                                 .clip(CircleShape).background(iconBrush)
                                 .border(4.dp, Color(0xCCFFFFFF), CircleShape),

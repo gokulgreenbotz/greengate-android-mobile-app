@@ -53,13 +53,26 @@ import androidx.navigation.NavController
 import com.greenbotz.greengate.core.facility.Booking
 import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.ui.navigation.Screen
+import com.greenbotz.greengate.ui.screens.home.SilkLines
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldButton
+import com.greenbotz.greengate.ui.theme.NavyGoldCream
+import com.greenbotz.greengate.ui.theme.NavyGoldGold
+import com.greenbotz.greengate.ui.theme.NavyGoldNavy
+import com.greenbotz.greengate.ui.theme.NavyGoldPage
+import com.greenbotz.greengate.ui.theme.NavyGoldShadow
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 
-private val PaymentBackdrop = Brush.verticalGradient(
+private val GlassPaymentBackdrop = Brush.verticalGradient(
     0f to Color(0xFFA9D6DF), 0.22f to Color(0xFFD3ECEC), 1f to Color(0xFFE6F4F1)
 )
-private val PaymentDeepGreen = Color(0xFF0F6B54)
-private val PaymentMint = Color(0xFFDDF5EC)
+// Theme 4 - Navy & Gold: a warm white page, white cards, navy accents and a gold edge on the chosen method.
+private val PaymentBackdrop: Brush get() = if (NavyGoldTheme) SolidColor(NavyGoldPage) else GlassPaymentBackdrop
+private val PaymentDeepGreen get() = if (NavyGoldTheme) NavyGoldNavy else Color(0xFF0F6B54)
+private val PaymentMint get() = if (NavyGoldTheme) Color(0xFFEEF1F8) else Color(0xFFDDF5EC)
+/** The chosen payment method's radio and the promo field's cursor. */
+private val PaymentAccent get() = if (NavyGoldTheme) NavyGoldNavy else FacilityGreen
+private val PaymentShadow get() = if (NavyGoldTheme) NavyGoldShadow else Color(0x1A0F3B33)
 private val PaymentDivider = Color(0x1F14232B)
 private val PaymentError = Color(0xFFC2412D)
 
@@ -76,7 +89,8 @@ internal fun BookingPaymentScreen(
     facility: Facility,
     day: BookingDay,
     hour: Int,
-    guests: Int
+    guests: Int,
+    hours: Int
 ) {
     var method by remember { mutableStateOf(PaymentMethod.CARD) }
     // No booking fee or tax yet; both rows stay so residents see the full breakdown.
@@ -85,11 +99,13 @@ internal fun BookingPaymentScreen(
     val total = facility.deposit + bookingFee + tax
 
     Box(Modifier.fillMaxSize().background(PaymentBackdrop), contentAlignment = Alignment.TopCenter) {
+        if (NavyGoldTheme) SilkLines(Modifier.fillMaxWidth().height(260.dp))
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                val backShadow = if (NavyGoldTheme) NavyGoldShadow else Color.Black
                 Box(
-                    Modifier.align(Alignment.CenterStart).size(52.dp).shadow(6.dp, CircleShape)
-                        .clip(CircleShape).background(Color(0xF2FFFFFF))
+                    Modifier.align(Alignment.CenterStart).size(52.dp).shadow(6.dp, CircleShape, ambientColor = backShadow, spotColor = backShadow)
+                        .clip(CircleShape).background(if (NavyGoldTheme) Color.White else Color(0xF2FFFFFF))
                         .clickable(role = Role.Button) { navController.popBackStack() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -104,7 +120,7 @@ internal fun BookingPaymentScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Spacer(Modifier.height(2.dp))
-                BookingSummaryCard(facility, day, hour, guests)
+                BookingSummaryCard(facility, day, hour, hours, guests)
                 PaymentSummaryCard(facility.deposit, bookingFee, tax, total)
                 GlassSection {
                     SectionTitle("Payment Method")
@@ -122,7 +138,7 @@ internal fun BookingPaymentScreen(
             CheckoutBar(total) {
                 // TODO: hand off to the payment gateway and bookings API once they exist; until
                 // then every payment "succeeds" straight away.
-                val booking = BookingStore.add(facility, day, hour, guests, bookingFee, method)
+                val booking = BookingStore.add(facility, day, hour, hours, guests, bookingFee, method)
                 navController.navigate(Screen.BookingConfirmed.create(booking.id)) {
                     // Back from the confirmation returns to the facility list, not to payment.
                     popUpTo(Screen.BookFacility.route)
@@ -136,8 +152,8 @@ internal fun BookingPaymentScreen(
 private fun GlassSection(padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(24.dp)
     Column(
-        Modifier.fillMaxWidth().shadow(2.dp, shape, ambientColor = Color(0x1A0F3B33), spotColor = Color(0x1A0F3B33))
-            .clip(shape).background(Color(0xB3FFFFFF)).border(1.5.dp,
+        Modifier.fillMaxWidth().shadow(if (NavyGoldTheme) 4.dp else 2.dp, shape, ambientColor = PaymentShadow, spotColor = PaymentShadow)
+            .clip(shape).background(if (NavyGoldTheme) Color.White else Color(0xB3FFFFFF)).border(if (NavyGoldTheme) 1.dp else 1.5.dp,
                 FacilityGlassBorder, shape)
             .padding(padding),
         content = content
@@ -150,22 +166,24 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun BookingSummaryCard(facility: Facility, day: BookingDay, hour: Int, guests: Int) {
+private fun BookingSummaryCard(facility: Facility, day: BookingDay, hour: Int, hours: Int, guests: Int) {
     GlassSection(padding = 10.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(width = 128.dp, height = 132.dp).clip(RoundedCornerShape(20.dp))
-                    .background(Brush.linearGradient(listOf(Color.White, Color(0xFFDDF0EA)))),
+                    .background(Brush.linearGradient(listOf(Color.White, if (NavyGoldTheme) NavyGoldCream else Color(0xFFDDF0EA)))),
                 contentAlignment = Alignment.Center
             ) {
-                Image(painterResource(facility.artwork), null, Modifier.size(104.dp))
+                Image(painterResource(facility.themedArtwork), null, Modifier.size(104.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(facility.name, fontFamily = DMSans, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
                 Spacer(Modifier.height(6.dp))
                 Row(
-                    Modifier.clip(RoundedCornerShape(50)).background(PaymentMint).padding(horizontal = 10.dp, vertical = 4.dp),
+                    // Availability stays green, so its pill keeps the mint in Theme 4 too.
+                    Modifier.clip(RoundedCornerShape(50)).background(if (NavyGoldTheme) Color(0xFFE3F4EC) else PaymentMint)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(FacilityGreen))
@@ -176,11 +194,7 @@ private fun BookingSummaryCard(facility: Facility, day: BookingDay, hour: Int, g
                 Row(Modifier.height(IntrinsicSize.Min)) {
                     SummaryFact(Icons.Outlined.CalendarToday, "Date", "${day.label()}\n${day.year}", Modifier.weight(1.1f))
                     FactDivider()
-                    SummaryFact(Icons.Outlined.Schedule, "Time", "${hourLabel(hour)} –\n${
-                        hourLabel(
-                            hour + 1
-                        )
-                    }", Modifier.weight(1.1f))
+                    SummaryFact(Icons.Outlined.Schedule, "Time", "${hourLabel(hour)} –\n${hourLabel(hour + hours)}", Modifier.weight(1.1f))
                     FactDivider()
                     SummaryFact(Icons.Outlined.Groups, "Guests", "$guests pax", Modifier.weight(.8f))
                 }
@@ -247,14 +261,25 @@ private fun PaymentMethodRow(method: PaymentMethod, selected: Boolean, onClick: 
     val shape = RoundedCornerShape(18.dp)
     Row(
         Modifier.fillMaxWidth().clip(shape)
-            .background(if (selected) Color(0xCCE4F7EF) else Color(0x99FFFFFF))
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) Color(0xFF5CC9A7) else FacilityGlassBorder, shape)
+            .background(when {
+                NavyGoldTheme -> if (selected) NavyGoldCream else Color.White
+                else -> if (selected) Color(0xCCE4F7EF) else Color(0x99FFFFFF)
+            })
+            .border(if (selected) 1.5.dp else 1.dp, when {
+                !selected -> FacilityGlassBorder
+                NavyGoldTheme -> NavyGoldGold
+                else -> Color(0xFF5CC9A7)
+            }, shape)
             .selectable(selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) Color(0xFFC6EEDD) else Color(0xE6FFFFFF)),
+            Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(when {
+                !selected -> if (NavyGoldTheme) Color(0xFFF7F4EE) else Color(0xE6FFFFFF)
+                NavyGoldTheme -> Color(0xFFF4E3BF)
+                else -> Color(0xFFC6EEDD)
+            }),
             contentAlignment = Alignment.Center
         ) {
             Icon(method.icon, null, tint = FacilityInk, modifier = Modifier.size(24.dp))
@@ -267,10 +292,10 @@ private fun PaymentMethodRow(method: PaymentMethod, selected: Boolean, onClick: 
         // Drawn rather than Material's RadioButton to match the design's soft ring.
         Box(
             Modifier.size(24.dp).clip(CircleShape)
-                .border(1.5.dp, if (selected) FacilityGreen else FacilityMuted.copy(alpha = .45f), CircleShape),
+                .border(1.5.dp, if (selected) PaymentAccent else FacilityMuted.copy(alpha = .45f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (selected) Box(Modifier.size(14.dp).clip(CircleShape).background(FacilityGreen))
+            if (selected) Box(Modifier.size(14.dp).clip(CircleShape).background(PaymentAccent))
         }
     }
 }
@@ -299,7 +324,7 @@ private fun PromoCodeCard() {
                     onValueChange = { code = it.take(24); error = null },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = DMSans, fontSize = 14.sp, color = FacilityInk),
-                    cursorBrush = SolidColor(FacilityGreen),
+                    cursorBrush = SolidColor(PaymentAccent),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { apply() }),
                     modifier = Modifier.fillMaxWidth()
@@ -307,7 +332,7 @@ private fun PromoCodeCard() {
             }
             Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xFFDCEBE8))
+                Modifier.clip(RoundedCornerShape(14.dp)).background(if (NavyGoldTheme) Color(0xFFF1EDE6) else Color(0xFFDCEBE8))
                     .clickable(role = Role.Button) { apply() }
                     .padding(horizontal = 18.dp, vertical = 10.dp)
             ) {
@@ -344,8 +369,9 @@ private fun CheckoutBar(total: Int, onConfirm: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
     Row(
         Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()
-            .shadow(8.dp, shape, ambientColor = Color(0x260F3B33), spotColor = Color(0x260F3B33))
-            .clip(shape).background(Color(0xE6FFFFFF)).border(1.5.dp,
+            .shadow(8.dp, shape, ambientColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x260F3B33),
+                spotColor = if (NavyGoldTheme) NavyGoldShadow else Color(0x260F3B33))
+            .clip(shape).background(if (NavyGoldTheme) Color.White else Color(0xE6FFFFFF)).border(1.5.dp,
                 FacilityGlassBorder, shape)
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -358,7 +384,7 @@ private fun CheckoutBar(total: Int, onConfirm: () -> Unit) {
         Spacer(Modifier.width(14.dp))
         Row(
             Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(50))
-                .background(Brush.horizontalGradient(listOf(PaymentDeepGreen, Color(0xFF1B8A6B))))
+                .background(if (NavyGoldTheme) NavyGoldButton else Brush.horizontalGradient(listOf(PaymentDeepGreen, Color(0xFF1B8A6B))))
                 .clickable(role = Role.Button, onClick = onConfirm),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically

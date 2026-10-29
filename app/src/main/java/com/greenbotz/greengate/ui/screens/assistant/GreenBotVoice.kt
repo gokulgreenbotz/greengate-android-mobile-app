@@ -14,11 +14,33 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.greenbotz.greengate.core.session.AppPreferences
 import java.util.Locale
+
+/**
+ * Green Bot's voice until the resident picks another in Profile: Google's US English "tpc" voice
+ * (listed there as English (United States) · Voice 7 on a Google text-to-speech phone).
+ */
+internal const val DefaultGreenBotVoice = "en-us-x-tpc"
+
+/**
+ * The voice Green Bot speaks with on this phone: the one picked in Profile, else [DefaultGreenBotVoice].
+ * Null means the phone's own voice for the language: picked as "Phone default", or the phone lacks both.
+ */
+internal fun greenBotVoiceFor(tts: TextToSpeech): Voice? {
+    val picked = AppPreferences.greenBotVoice
+    if (picked == AppPreferences.PhoneDefaultVoice) return null
+    val installed = (tts.voices ?: emptySet()).filter { TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features.orEmpty() }
+    return picked?.let { name -> installed.firstOrNull { it.name == name } }
+        // Google lists the voice on-device and online; prefer on-device.
+        ?: installed.filter { it.name.removeSuffix("-local").removeSuffix("-network") == DefaultGreenBotVoice }
+            .minByOrNull { it.isNetworkConnectionRequired }
+}
 
 /** A single, explicitly started voice turn. No automatic or background listening. */
 internal class GreenBotVoice(
@@ -313,6 +335,7 @@ internal class GreenBotVoice(
                 failSpeechOutput("Install an English voice in your device's text-to-speech settings to hear replies.")
                 return
             }
+            greenBotVoiceFor(engine)?.let { engine.setVoice(it) }
             val listenerResult = engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) = updateUtterance(utteranceId) { isSpeaking = true }
                 override fun onDone(utteranceId: String?) = completeUtterance(utteranceId)

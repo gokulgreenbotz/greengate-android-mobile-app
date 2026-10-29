@@ -63,7 +63,6 @@ import com.greenbotz.greengate.ui.screens.payments.TransactionDetailScreen
 import com.greenbotz.greengate.ui.screens.profile.ProfileScreen
 import com.greenbotz.greengate.ui.screens.visitors.InviteCreatedScreen
 import com.greenbotz.greengate.ui.screens.visitors.InviteDetailScreen
-import com.greenbotz.greengate.ui.screens.visitors.InviteType
 import com.greenbotz.greengate.ui.screens.visitors.VisitorManagementScreen
 import kotlinx.coroutines.delay
 
@@ -170,16 +169,16 @@ fun MainScreen(
             NavHost(
                 navController = navController,
                 startDestination = Screen.Home.route,
-                enterTransition = { if (inBookingFlow()) bookingPushIn() else fadeIn(tween(
+                enterTransition = { if (inBookingFlow()) bookingPushIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
                     NavFadeMillis
                 )) },
-                exitTransition = { if (inBookingFlow()) bookingPushOut() else fadeOut(tween(
+                exitTransition = { if (inBookingFlow()) bookingPushOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
                     NavFadeMillis
                 )) },
-                popEnterTransition = { if (inBookingFlow()) bookingPopIn() else fadeIn(tween(
+                popEnterTransition = { if (inBookingFlow()) bookingPopIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
                     NavFadeMillis
                 )) },
-                popExitTransition = { if (inBookingFlow()) bookingPopOut() else fadeOut(tween(
+                popExitTransition = { if (inBookingFlow()) bookingPopOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
                     NavFadeMillis
                 )) }
             ) {
@@ -187,7 +186,8 @@ fun MainScreen(
                     composable(route) { entry ->
                         RoutePadding(entry, scaffoldPadding.value, underStatusBar()) { content(entry) }
                     }
-                screen(Screen.Home.route, underStatusBar = { AppPreferences.theme == AppTheme.ZERO }) {
+                // Themes 0 and 4 draw their header art behind the status bar.
+                screen(Screen.Home.route, underStatusBar = { AppPreferences.theme == AppTheme.ZERO || AppPreferences.theme == AppTheme.FOUR }) {
                     HomeScreen(
                         navController
                     )
@@ -211,7 +211,7 @@ fun MainScreen(
                 }
                 screen(Screen.BookingPayment.route, underStatusBar = { true }) { entry ->
                     entry.arguments.bookingArgs()?.let {
-                        BookingPaymentScreen(navController, it.facility, it.day, it.hour, it.guests)
+                        BookingPaymentScreen(navController, it.facility, it.day, it.hour, it.guests, it.hours)
                     }
                 }
                 screen(Screen.BookingConfirmed.route, underStatusBar = { true }) { entry ->
@@ -240,14 +240,6 @@ fun MainScreen(
                         navController,
                         voiceAllowed = botVoiceAllowed.value
                     )
-                }
-                screen(Screen.CreateInvite.route, underStatusBar = { true }) { entry ->
-                    // Family / Friend, Delivery and Cab invites are made inside the Create Invite sheet.
-                    // TODO: replace with the Other form once it is designed.
-                    val type = InviteType.entries.find { it.name == entry.arguments?.getString("type") }
-                    Box(Modifier.fillMaxSize().statusBarsPadding()) {
-                        PlaceholderScreen("Invite: ${type?.title ?: "Visitor"}", navController)
-                    }
                 }
                 screen(Screen.TransactionDetail.route, underStatusBar = { true }) { entry ->
                     val id = entry.arguments?.getString("id")
@@ -369,7 +361,7 @@ private fun RoutePadding(
     )) { content() }
 }
 
-private class BookingArgs(val facility: Facility, val day: BookingDay, val hour: Int, val guests: Int)
+private class BookingArgs(val facility: Facility, val day: BookingDay, val hour: Int, val guests: Int, val hours: Int)
 
 private fun Bundle?.bookingArgs(): BookingArgs? {
     val facility = Facilities.find { it.id == this?.getString("facility") } ?: return null
@@ -377,6 +369,7 @@ private fun Bundle?.bookingArgs(): BookingArgs? {
     return BookingArgs(
         facility, BookingDay(date[0], date[1] - 1, date[2]),
         hour = getString("hour")?.toIntOrNull() ?: return null,
-        guests = getString("guests")?.toIntOrNull() ?: 1
+        guests = getString("guests")?.toIntOrNull() ?: 1,
+        hours = getString("hours")?.toIntOrNull()?.coerceAtLeast(1) ?: 1
     )
 }

@@ -55,12 +55,12 @@ internal data class VisitorInvite(
     val endAt: Long get() = startAt + validHours * 60 * MinuteMs
     val entries: Int get() = access.count { it.entry }
 
-    /** Who the visitor is, as listed: "Family", or e.g. "Cab • Pickup" or "Delivery • GrabFood". */
+    /** Who the visitor is, as listed: "Family", or e.g. "Cab • Pickup", "Delivery • GrabFood" or "Technician • CoolAir". */
     val kindLabel: String get() = when (type) {
         InviteType.FAMILY -> relationship
         InviteType.CAB -> "Cab • $relationship"
         InviteType.DELIVERY -> "Delivery • $relationship"
-        else -> type.title
+        InviteType.OTHER -> relationship.ifBlank { type.title }
     }
 
     fun status(now: Long = System.currentTimeMillis()): InviteStatus = when {

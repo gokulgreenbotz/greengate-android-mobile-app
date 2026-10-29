@@ -33,6 +33,7 @@ import com.greenbotz.greengate.core.facility.BookingStatus
 import com.greenbotz.greengate.core.facility.BookingStore
 import com.greenbotz.greengate.ui.navigation.Screen
 import com.greenbotz.greengate.ui.theme.DMSans
+import com.greenbotz.greengate.ui.theme.NavyGoldTheme
 
 /** Reached from the calendar button on Book Facility. */
 @Composable
@@ -45,7 +46,7 @@ internal fun MyBookingsScreen(navController: NavController) {
         if (tab == BookingStatus.UPCOMING) list.sortedBy { it.startAt } else list.sortedByDescending { it.startAt }
     }
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    BookingsScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
             GlassTopBar("My Bookings", onBack = { navController.popBackStack() }) {
                 FoldingLabelButton(Icons.Outlined.ReceiptLong, "Payments") {
@@ -125,7 +126,7 @@ private fun SegmentChip(label: String, selected: Boolean, modifier: Modifier, on
     val shape = RoundedCornerShape(50)
     Box(
         modifier.height(42.dp).clip(shape)
-            .background(if (selected) BookingsDeepGreen else Color(0xB3FFFFFF))
+            .background(if (selected) BookingsDeepGreen else if (NavyGoldTheme) Color.White else Color(0xB3FFFFFF))
             .border(1.dp, if (selected) BookingsDeepGreen else FacilityGlassBorder, shape)
             .clickable(role = Role.Tab, onClick = onClick),
         contentAlignment = Alignment.Center

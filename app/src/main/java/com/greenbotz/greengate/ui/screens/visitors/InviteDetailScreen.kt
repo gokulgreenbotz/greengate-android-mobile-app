@@ -48,24 +48,14 @@ import com.greenbotz.greengate.core.visitor.VehicleChangeKind
 import com.greenbotz.greengate.core.visitor.VisitorInvite
 import com.greenbotz.greengate.core.visitor.VisitorStore
 import com.greenbotz.greengate.ui.navigation.Screen
-import com.greenbotz.greengate.ui.screens.facilities.BookingsBackdrop
-import com.greenbotz.greengate.ui.screens.facilities.BookingsDeepGreen
 import com.greenbotz.greengate.ui.screens.facilities.BookingsDivider
-import com.greenbotz.greengate.ui.screens.facilities.BookingsMint
 import com.greenbotz.greengate.ui.screens.facilities.BookingsRed
-import com.greenbotz.greengate.ui.screens.facilities.FacilityGreen
-import com.greenbotz.greengate.ui.screens.facilities.FacilityInk
-import com.greenbotz.greengate.ui.screens.facilities.FacilityMuted
 import com.greenbotz.greengate.ui.screens.facilities.FacilityOrange
-import com.greenbotz.greengate.ui.screens.facilities.GlassCard
-import com.greenbotz.greengate.ui.screens.facilities.GlassIconButton
-import com.greenbotz.greengate.ui.screens.facilities.GlassTopBar
 import com.greenbotz.greengate.ui.screens.facilities.MintButton
 import com.greenbotz.greengate.ui.screens.facilities.PillButton
 import com.greenbotz.greengate.ui.screens.facilities.RedTintButton
 import com.greenbotz.greengate.ui.screens.facilities.StatusPill
 import com.greenbotz.greengate.ui.screens.facilities.StatusTone
-import com.greenbotz.greengate.ui.screens.facilities.greenButton
 import com.greenbotz.greengate.ui.screens.facilities.greenTone
 import com.greenbotz.greengate.ui.screens.facilities.orangeTone
 import com.greenbotz.greengate.ui.screens.facilities.redTone
@@ -100,11 +90,11 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
         dismissButton = { TextButton(onClick = { confirmRevoke = false }) { Text("Keep it", fontFamily = DMSans) } }
     )
 
-    Box(Modifier.fillMaxSize().background(BookingsBackdrop), contentAlignment = Alignment.TopCenter) {
+    InviteScreen {
         Column(Modifier.widthIn(max = 600.dp).fillMaxSize().statusBarsPadding()) {
-            GlassTopBar("Invite Details", onBack = { navController.popBackStack() }) {
+            InviteTopBar("Invite Details", onBack = { navController.popBackStack() }) {
                 if (open) Box {
-                    GlassIconButton(Icons.Rounded.MoreVert, "More options") { menu = true }
+                    InviteIconButton(Icons.Rounded.MoreVert, "More options") { menu = true }
                     DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Color.White) {
                         DropdownMenuItem(text = { Text("Revoke invite", fontFamily = DMSans, color = BookingsRed) }, onClick = {
                             menu = false
@@ -115,19 +105,19 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                GlassCard(padding = 12.dp) {
+                InviteCard(padding = 12.dp) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         InviteAvatar(invite, 56.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(invite.name, fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-                            Text(invite.kindLabel, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+                            Text(invite.name, fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = InviteInk)
+                            Text(invite.kindLabel, fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
                         }
                         StatusPill(status.tone())
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(themed(Color(0x99FFFFFF), BackgroundCream)).padding(4.dp)
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(InviteSegmentFill).padding(4.dp)
                 ) {
                     listOf(
                         InviteTab.DETAILS to "Details",
@@ -143,7 +133,7 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
                         ) {
                             Text(label, fontFamily = DMSans, fontSize = 13.sp, maxLines = 1,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                                color = if (selected) FacilityInk else FacilityMuted)
+                                color = if (selected) InviteInk else InviteMuted)
                         }
                     }
                 }
@@ -158,12 +148,17 @@ internal fun InviteDetailScreen(navController: NavController, invite: VisitorInv
                 Spacer(Modifier.height(4.dp))
             }
             if (open) Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("Share Pass", Modifier.fillMaxWidth().height(54.dp), icon = Icons.Outlined.Share, background = MintButton) {
+                // Theme 4: a navy Share Pass with white type, and a warm grey Edit.
+                val navyGold = NavyGoldInvites
+                PillButton("Share Pass", Modifier.fillMaxWidth().height(54.dp), icon = Icons.Outlined.Share,
+                    tint = if (navyGold) Color.White else InviteInk,
+                    background = if (navyGold) NavyButton else MintButton) {
                     navController.navigate(Screen.InviteCreated.create(invite.id))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton("Edit", Modifier.weight(1f).height(54.dp),
-                        background = themed(Brush.linearGradient(listOf(Color(0xFFEEF2F1), Color(0xFFE6ECEA))), SolidColor(BackgroundCream))) {
+                    PillButton("Edit", Modifier.weight(1f).height(54.dp), tint = InviteInk,
+                        background = if (navyGold) SolidColor(Color(0xFFF1EDE6))
+                            else themed(Brush.linearGradient(listOf(Color(0xFFEEF2F1), Color(0xFFE6ECEA))), SolidColor(BackgroundCream))) {
                         // TODO: open the invite form pre-filled once editing is supported by the visitor API.
                         Toast.makeText(context, "Editing invites isn't available yet", Toast.LENGTH_SHORT).show()
                     }
@@ -186,12 +181,12 @@ private fun VehicleApproval(invite: VisitorInvite) {
         VisitorStore.resolveVehicleRequest(invite.id, approve)
         Toast.makeText(context, if (approve) "Vehicle updated" else "Request rejected", Toast.LENGTH_SHORT).show()
     }
-    GlassCard(padding = 14.dp) {
+    InviteCard(padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.DirectionsCar, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
+            Icon(Icons.Outlined.DirectionsCar, null, tint = InviteInk, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
             Text("Vehicle update request", Modifier.weight(1f), fontFamily = DMSans, fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold, color = FacilityInk)
+                fontWeight = FontWeight.SemiBold, color = InviteInk)
             StatusPill(orangeTone("Awaiting approval"), small = true)
         }
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = BookingsDivider)
@@ -203,13 +198,13 @@ private fun VehicleApproval(invite: VisitorInvite) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(16.dp)).background(Color.White)
-                    .border(1.5.dp, BookingsDeepGreen, RoundedCornerShape(16.dp))
+                    .border(1.5.dp, InviteDeep, RoundedCornerShape(16.dp))
                     .clickable(role = Role.Button) { resolve(false) },
                 contentAlignment = Alignment.Center
-            ) { Text("Reject", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = BookingsDeepGreen) }
+            ) { Text("Reject", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = InviteDeep) }
             Box(
                 Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(16.dp))
-                    .background(greenButton(Color(0xFF1D8A6A)))
+                    .background(inviteButton(Color(0xFF1D8A6A)))
                     .clickable(role = Role.Button) { resolve(true) },
                 contentAlignment = Alignment.Center
             ) { Text("Approve", fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
@@ -219,7 +214,7 @@ private fun VehicleApproval(invite: VisitorInvite) {
 
 @Composable
 private fun InviteFacts(invite: VisitorInvite) {
-    GlassCard(padding = 14.dp) {
+    InviteCard(padding = 14.dp) {
         FactRow(Icons.Outlined.CalendarMonth, "Date", "${invite.day.label()} ${invite.day.year}")
         FactRow(Icons.Outlined.Schedule, "Time", invite.timeRange)
         FactRow(Icons.Outlined.HourglassEmpty, "Valid For", invite.validForLabel)
@@ -228,7 +223,7 @@ private fun InviteFacts(invite: VisitorInvite) {
             !invite.faceRegistration -> "Off"
             invite.faceRegistered -> "Registered"
             else -> "Pending"
-        }, valueColor = if (invite.faceRegistered) FacilityGreen else FacilityInk)
+        }, valueColor = if (invite.faceRegistered) InviteAccent else InviteInk)
         FactRow(Icons.Outlined.EventRepeat, "Recurring", invite.repeat ?: "No")
         FactRow(Icons.Outlined.NotificationsActive, "Notify me on entry", if (invite.notifyOnEntry) "Yes" else "No")
         FactRow(Icons.Outlined.Description, "Notes", invite.note.ifBlank { "-" }, last = true)
@@ -236,11 +231,11 @@ private fun InviteFacts(invite: VisitorInvite) {
 }
 
 @Composable
-private fun FactRow(icon: ImageVector, label: String, value: String, valueColor: Color = FacilityInk, last: Boolean = false) {
+private fun FactRow(icon: ImageVector, label: String, value: String, valueColor: Color = InviteInk, last: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = FacilityInk, modifier = Modifier.size(22.dp))
+        Icon(icon, null, tint = InviteInk, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
         Text(value, fontFamily = DMSans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = valueColor, textAlign = TextAlign.End)
     }
     if (!last) HorizontalDivider(Modifier.padding(start = 34.dp), color = BookingsDivider)
@@ -248,11 +243,11 @@ private fun FactRow(icon: ImageVector, label: String, value: String, valueColor:
 
 @Composable
 private fun AccessTimeline(invite: VisitorInvite) {
-    GlassCard(padding = 14.dp) {
+    InviteCard(padding = 14.dp) {
         if (invite.access.isEmpty()) {
             Text("No entries yet. Each gate and door the visitor passes will appear here.",
-                fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
-            return@GlassCard
+                fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
+            return@InviteCard
         }
         val events = invite.access.sortedBy { it.at }
         events.forEachIndexed { i, event ->
@@ -266,7 +261,7 @@ private fun AccessTimeline(invite: VisitorInvite) {
 }
 
 private class HistoryStep(val icon: ImageVector, val title: String, val detail: String?, val at: Long,
-                          val tint: Color = BookingsDeepGreen, val tile: Color = BookingsMint)
+                          val tint: Color = InviteDeep, val tile: Color = InviteTile)
 
 /** The invite's own changes: when it was created, every vehicle change request and decision, and a revoke. */
 @Composable
@@ -287,7 +282,7 @@ private fun ChangeTimeline(invite: VisitorInvite) {
         }
         invite.revokedAt?.let { add(HistoryStep(Icons.Outlined.Block, "Invite Revoked", null, it, BookingsRed, Color(0xFFFDE7E4))) }
     }.sortedBy { it.at }
-    GlassCard(padding = 14.dp) {
+    InviteCard(padding = 14.dp) {
         steps.forEachIndexed { i, step ->
             TimelineStep(step.icon, step.title, step.detail, step.at, last = i == steps.lastIndex, tint = step.tint, tile = step.tile)
         }
@@ -297,20 +292,20 @@ private fun ChangeTimeline(invite: VisitorInvite) {
 @Composable
 private fun TimelineStep(
     icon: ImageVector, title: String, detail: String?, at: Long, last: Boolean,
-    pill: StatusTone? = null, tint: Color = BookingsDeepGreen, tile: Color = BookingsMint,
+    pill: StatusTone? = null, tint: Color = InviteDeep, tile: Color = InviteTile,
 ) {
     Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
         Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(tile), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
             }
-            if (!last) Box(Modifier.width(2.dp).weight(1f).heightIn(min = 16.dp).background(BookingsMint))
+            if (!last) Box(Modifier.width(2.dp).weight(1f).heightIn(min = 16.dp).background(InviteTile))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).padding(top = 2.dp, bottom = if (last) 0.dp else 14.dp)) {
-            Text(title, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-            if (detail != null) Text(detail, fontFamily = DMSans, fontSize = 13.sp, color = FacilityInk.copy(alpha = .8f))
-            Text(dateTimeLabel(at), fontFamily = DMSans, fontSize = 12.sp, color = FacilityMuted)
+            Text(title, fontFamily = DMSans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = InviteInk)
+            if (detail != null) Text(detail, fontFamily = DMSans, fontSize = 13.sp, color = InviteInk.copy(alpha = .8f))
+            Text(dateTimeLabel(at), fontFamily = DMSans, fontSize = 12.sp, color = InviteMuted)
         }
         if (pill != null) StatusPill(pill)
     }
@@ -319,8 +314,8 @@ private fun TimelineStep(
 @Composable
 private fun RequestLine(label: String, value: String, highlight: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
+        Text(label, Modifier.weight(1f), fontFamily = DMSans, fontSize = 14.sp, color = InviteMuted)
         Text(value, Modifier.weight(1.2f), fontFamily = DMSans, fontSize = 15.sp, textAlign = TextAlign.End,
-            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium, color = if (highlight) BookingsDeepGreen else FacilityInk)
+            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium, color = if (highlight) InviteDeep else InviteInk)
     }
 }
