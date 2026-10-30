@@ -15,6 +15,7 @@ private const val PREFS_NAME = "resident_session"
 private const val KEY_DEVICE_ID = "device_id"
 private const val KEY_REFRESH_TOKEN = "refresh_token"
 private const val KEY_ENVIRONMENT = "environment"
+private const val KEY_BIOMETRIC_LOGIN = "biometric_login"
 private const val KEYSTORE = "AndroidKeyStore"
 private const val KEY_ALIAS = "resident_session_key"
 private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -41,6 +42,13 @@ internal class SessionStore(context: Context) {
         get() = prefs.getString(KEY_ENVIRONMENT, null)
         set(value) {
             prefs.edit().putString(KEY_ENVIRONMENT, value).commit()
+        }
+
+    /** Fingerprint / face sign-in is on: a saved sign-in opens locked. Safe on the main thread. */
+    var biometricLogin: Boolean
+        get() = prefs.getBoolean(KEY_BIOMETRIC_LOGIN, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_BIOMETRIC_LOGIN, value).apply()
         }
 
     /** Null when signed out, or when the Keystore key is gone (e.g. data restored to a new phone). */

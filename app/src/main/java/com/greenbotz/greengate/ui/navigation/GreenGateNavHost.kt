@@ -70,11 +70,16 @@ import kotlinx.coroutines.delay
 // "Package name does not match containing directory" fix moves it to ui.navigation.
 
 
+/**
+ * The signed-in app. While [lockScreen] is set (biometric sign-in waiting), it shows that instead of
+ * the app's screens, but keeps listening for door calls and shows them over it.
+ */
 @Composable
 fun MainScreen(
     controller: ReceiverCallController? = null,
     onLogout: () -> Unit = {},
-    onSwitchServer: (ApiEnvironment) -> Unit = {}
+    onSwitchServer: (ApiEnvironment) -> Unit = {},
+    lockScreen: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
     val activeController = remember(controller) {
@@ -123,7 +128,10 @@ fun MainScreen(
         Log.d("MainActivity", "Permissions updated: camera=$cameraGranted, audio=$audioGranted")
     }
 
-    LaunchedEffect(Unit) {
+    // After unlocking, so the permission dialog doesn't land on top of the fingerprint / face prompt.
+    val unlocked = lockScreen == null
+    LaunchedEffect(unlocked) {
+        if (!unlocked) return@LaunchedEffect
         val permissionsToRequest = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO
@@ -151,154 +159,159 @@ fun MainScreen(
     val botVoiceAllowed = rememberUpdatedState(callState.isTerminal)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (AppPreferences.theme == AppTheme.ZERO) Image(
-            painter = painterResource(R.drawable.gg_home_reference_background),
-            contentDescription = null, modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.FillBounds
-        )
-        Scaffold(
-            bottomBar = {
-                if (isMainTab(currentRoute) && callState.isTerminal) {
-                    BottomNavigationBar(navController, currentRoute)
-                }
-            },
-            containerColor = if (AppPreferences.theme == AppTheme.ZERO) Color.Transparent else MarinaBackground
-        ) { innerPadding ->
-            // Read through State so padding changes don't rebuild the nav graph.
-            val scaffoldPadding = rememberUpdatedState(innerPadding)
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Home.route,
-                enterTransition = { if (inBookingFlow()) bookingPushIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
-                    NavFadeMillis
-                )) },
-                exitTransition = { if (inBookingFlow()) bookingPushOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
-                    NavFadeMillis
-                )) },
-                popEnterTransition = { if (inBookingFlow()) bookingPopIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
-                    NavFadeMillis
-                )) },
-                popExitTransition = { if (inBookingFlow()) bookingPopOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
-                    NavFadeMillis
-                )) }
-            ) {
-                fun screen(route: String, underStatusBar: () -> Boolean = { false }, content: @Composable (NavBackStackEntry) -> Unit) =
-                    composable(route) { entry ->
-                        RoutePadding(entry, scaffoldPadding.value, underStatusBar()) { content(entry) }
+        // Locked: the lock page instead of the app. Calls still ring: the overlays below draw over it.
+        if (lockScreen != null) {
+            lockScreen()
+        } else {
+            if (AppPreferences.theme == AppTheme.ZERO) Image(
+                painter = painterResource(R.drawable.gg_home_reference_background),
+                contentDescription = null, modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds
+            )
+            Scaffold(
+                bottomBar = {
+                    if (isMainTab(currentRoute) && callState.isTerminal) {
+                        BottomNavigationBar(navController, currentRoute)
                     }
-                // Themes 0 and 4 draw their header art behind the status bar.
-                screen(Screen.Home.route, underStatusBar = { AppPreferences.theme == AppTheme.ZERO || AppPreferences.theme == AppTheme.FOUR }) {
-                    HomeScreen(
-                        navController
-                    )
-                }
-                screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
-                screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
-                screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
-                screen(Screen.Profile.route) { ProfileScreen(navController, onLogout, onSwitchServer) }
-                screen(Screen.BookFacility.route, underStatusBar = { true }) {
-                    BookFacilityScreen(
-                        navController
-                    )
-                }
-                screen(Screen.FacilityAbout.route, underStatusBar = { true }) { entry ->
-                    Facilities.find { it.id == entry.arguments?.getString("id") }?.let {
-                        FacilityAboutScreen(
-                            navController,
-                            it
+                },
+                containerColor = if (AppPreferences.theme == AppTheme.ZERO) Color.Transparent else MarinaBackground
+            ) { innerPadding ->
+                // Read through State so padding changes don't rebuild the nav graph.
+                val scaffoldPadding = rememberUpdatedState(innerPadding)
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Home.route,
+                    enterTransition = { if (inBookingFlow()) bookingPushIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
+                        NavFadeMillis
+                    )) },
+                    exitTransition = { if (inBookingFlow()) bookingPushOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
+                        NavFadeMillis
+                    )) },
+                    popEnterTransition = { if (inBookingFlow()) bookingPopIn() else if (betweenTabs()) tabSlideIn() else fadeIn(tween(
+                        NavFadeMillis
+                    )) },
+                    popExitTransition = { if (inBookingFlow()) bookingPopOut() else if (betweenTabs()) tabSlideOut() else fadeOut(tween(
+                        NavFadeMillis
+                    )) }
+                ) {
+                    fun screen(route: String, underStatusBar: () -> Boolean = { false }, content: @Composable (NavBackStackEntry) -> Unit) =
+                        composable(route) { entry ->
+                            RoutePadding(entry, scaffoldPadding.value, underStatusBar()) { content(entry) }
+                        }
+                    // Themes 0 and 4 draw their header art behind the status bar.
+                    screen(Screen.Home.route, underStatusBar = { AppPreferences.theme == AppTheme.ZERO || AppPreferences.theme == AppTheme.FOUR }) {
+                        HomeScreen(
+                            navController
                         )
                     }
-                }
-                screen(Screen.BookingPayment.route, underStatusBar = { true }) { entry ->
-                    entry.arguments.bookingArgs()?.let {
-                        BookingPaymentScreen(navController, it.facility, it.day, it.hour, it.guests, it.hours)
-                    }
-                }
-                screen(Screen.BookingConfirmed.route, underStatusBar = { true }) { entry ->
-                    BookingStore.find(entry.arguments?.getString("id"))?.let {
-                        BookingConfirmedScreen(
-                            navController,
-                            it
+                    screen(Screen.Community.route) { PlaceholderScreen("Community", navController) }
+                    screen(Screen.Access.route) { PlaceholderScreen("Access", navController) }
+                    screen(Screen.Services.route) { PlaceholderScreen("Services", navController) }
+                    screen(Screen.Profile.route) { ProfileScreen(navController, onLogout, onSwitchServer) }
+                    screen(Screen.BookFacility.route, underStatusBar = { true }) {
+                        BookFacilityScreen(
+                            navController
                         )
                     }
-                }
-                screen(Screen.BookingDetail.route, underStatusBar = { true }) { entry ->
-                    BookingStore.find(entry.arguments?.getString("id"))?.let {
-                        BookingDetailScreen(
-                            navController,
-                            it
+                    screen(Screen.FacilityAbout.route, underStatusBar = { true }) { entry ->
+                        Facilities.find { it.id == entry.arguments?.getString("id") }?.let {
+                            FacilityAboutScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.BookingPayment.route, underStatusBar = { true }) { entry ->
+                        entry.arguments.bookingArgs()?.let {
+                            BookingPaymentScreen(navController, it.facility, it.day, it.hour, it.guests, it.hours)
+                        }
+                    }
+                    screen(Screen.BookingConfirmed.route, underStatusBar = { true }) { entry ->
+                        BookingStore.find(entry.arguments?.getString("id"))?.let {
+                            BookingConfirmedScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.BookingDetail.route, underStatusBar = { true }) { entry ->
+                        BookingStore.find(entry.arguments?.getString("id"))?.let {
+                            BookingDetailScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.Payments.route, underStatusBar = { true }) {
+                        PaymentsScreen(
+                            navController
                         )
                     }
-                }
-                screen(Screen.Payments.route, underStatusBar = { true }) {
-                    PaymentsScreen(
-                        navController
-                    )
-                }
-                screen(Screen.GreenBot.route) {
-                    GreenBotScreen(
-                        navController,
-                        voiceAllowed = botVoiceAllowed.value
-                    )
-                }
-                screen(Screen.TransactionDetail.route, underStatusBar = { true }) { entry ->
-                    val id = entry.arguments?.getString("id")
-                    transactionsOf(BookingStore.bookings).find { it.id == id }?.let {
-                        TransactionDetailScreen(
+                    screen(Screen.GreenBot.route) {
+                        GreenBotScreen(
                             navController,
-                            it
+                            voiceAllowed = botVoiceAllowed.value
                         )
                     }
-                }
-                screen(Screen.InviteVisitors.route) {
-                    PlaceholderScreen(
-                        "Green Invite",
-                        navController
-                    )
-                }
-                screen(Screen.EForms.route) { PlaceholderScreen("E-Forms", navController) }
-                screen(Screen.Feedback.route) { PlaceholderScreen("Feedback", navController) }
-                screen(Screen.Announcements.route) { AnnouncementsScreen(navController) }
-                screen(Screen.Search.route) { PlaceholderScreen("Search", navController) }
-                screen(Screen.Notifications.route) {
-                    PlaceholderScreen(
-                        "Notifications",
-                        navController
-                    )
-                }
-                screen(Screen.LocationPicker.route) { PlaceholderScreen("Location", navController) }
-                screen(Screen.Bookings.route, underStatusBar = { true }) {
-                    MyBookingsScreen(
-                        navController
-                    )
-                }
-                screen(Screen.Visitors.route, underStatusBar = { true }) {
-                    VisitorManagementScreen(
-                        navController
-                    )
-                }
-                screen(Screen.InviteCreated.route, underStatusBar = { true }) { entry ->
-                    VisitorStore.find(entry.arguments?.getString("id"))?.let {
-                        InviteCreatedScreen(
-                            navController,
-                            it
+                    screen(Screen.TransactionDetail.route, underStatusBar = { true }) { entry ->
+                        val id = entry.arguments?.getString("id")
+                        transactionsOf(BookingStore.bookings).find { it.id == id }?.let {
+                            TransactionDetailScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.InviteVisitors.route) {
+                        PlaceholderScreen(
+                            "Green Invite",
+                            navController
                         )
                     }
-                }
-                screen(Screen.InviteDetail.route, underStatusBar = { true }) { entry ->
-                    VisitorStore.find(entry.arguments?.getString("id"))?.let {
-                        InviteDetailScreen(
-                            navController,
-                            it
+                    screen(Screen.EForms.route) { PlaceholderScreen("E-Forms", navController) }
+                    screen(Screen.Feedback.route) { PlaceholderScreen("Feedback", navController) }
+                    screen(Screen.Announcements.route) { AnnouncementsScreen(navController) }
+                    screen(Screen.Search.route) { PlaceholderScreen("Search", navController) }
+                    screen(Screen.Notifications.route) {
+                        PlaceholderScreen(
+                            "Notifications",
+                            navController
                         )
                     }
-                }
-                screen(Screen.CommunityInfo.route) { CommunityInfoScreen(navController) }
-                screen(Screen.CallTest.route) {
-                    CallTestHarnessScreen(
-                        controller = activeController,
-                        onBack = { navController.popBackStack() }
-                    )
+                    screen(Screen.LocationPicker.route) { PlaceholderScreen("Location", navController) }
+                    screen(Screen.Bookings.route, underStatusBar = { true }) {
+                        MyBookingsScreen(
+                            navController
+                        )
+                    }
+                    screen(Screen.Visitors.route, underStatusBar = { true }) {
+                        VisitorManagementScreen(
+                            navController
+                        )
+                    }
+                    screen(Screen.InviteCreated.route, underStatusBar = { true }) { entry ->
+                        VisitorStore.find(entry.arguments?.getString("id"))?.let {
+                            InviteCreatedScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.InviteDetail.route, underStatusBar = { true }) { entry ->
+                        VisitorStore.find(entry.arguments?.getString("id"))?.let {
+                            InviteDetailScreen(
+                                navController,
+                                it
+                            )
+                        }
+                    }
+                    screen(Screen.CommunityInfo.route) { CommunityInfoScreen(navController) }
+                    screen(Screen.CallTest.route) {
+                        CallTestHarnessScreen(
+                            controller = activeController,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }

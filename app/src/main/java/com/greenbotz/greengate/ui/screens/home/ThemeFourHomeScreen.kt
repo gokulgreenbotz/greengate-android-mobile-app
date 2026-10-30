@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -182,6 +183,13 @@ internal fun ThemeFourHomeScreen(navController: NavController) {
                 Spacer(Modifier.height(18.u(s)))
             }
         }
+        // The silk lines show behind the status bar at the top. Once the page scrolls, a page-coloured
+        // strip fades in there so cards don't run under the clock and battery icons.
+        Box(
+            Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
+                .graphicsLayer { alpha = (scroll.value / 24.dp.toPx()).coerceIn(0f, 1f) }
+                .background(RoyalPage)
+        )
     }
     if (showSos) SosScreen(
         onDismiss = { showSos = false },

@@ -14,12 +14,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HourglassBottom
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.HorizontalDivider
@@ -42,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -69,10 +67,8 @@ import com.greenbotz.greengate.ui.theme.PlayfairDisplay
 import com.greenbotz.greengate.ui.theme.SoftGreen
 import java.util.Calendar
 
-// Bookings run for one to three hours.
-private val Durations = 1..3
-
-private enum class FullSection { NONE, DATE, DURATION }
+// Bookings run for one to three hours, one hourly slot each.
+private const val MaxHours = 3
 
 private val GoldEdge = Color(0xFFD9B36A)
 // A chosen time, duration or mode: navy with a gold edge in Theme 4, solid green otherwise.
@@ -86,15 +82,17 @@ private val BookingDaySaver = listSaver<BookingDay, Int>(
     restore = { BookingDay(it[0], it[1], it[2]) }
 )
 
-/** e.g. "09:00". The chips are too narrow for "9:00 AM". */
-private fun shortHourLabel(hour: Int) = "${hour.toString().padStart(2, '0')}:00"
+/** e.g. "9 AM". The chips are too narrow for "9:00 AM". */
+private fun shortHourLabel(hour: Int) = "${(hour + 11) % 12 + 1} ${if (hour < 12) "AM" else "PM"}"
 
 private fun durationLabel(hours: Int) = if (hours == 1) "1 hour" else "$hours hours"
 
 /**
  * Book Facility's Full view: one facility under a large photo, a strip of every facility to switch
- * between, and date, start time, duration and guests together in one card. Only start times whose
- * whole duration is free can be picked. [onCheck] receives the facility, day, start hour, guests and hours.
+ * between, and date, time, duration and guests together in one card. The date is Today, Tomorrow or
+ * any other from a calendar; the time is up to [MaxHours] back-to-back hourly slots, picked from the
+ * morning or afternoon, and their count is the duration. [onCheck] receives the facility, day, first
+ * slot's hour, guests and hours.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -117,19 +115,43 @@ internal fun FullBookingView(
     var savedDay by rememberSaveable(stateSaver = BookingDaySaver) { mutableStateOf(today) }
     // A day kept from yesterday's visit moves up to today.
     val day = maxOf(savedDay, today)
-    var hours by rememberSaveable { mutableIntStateOf(Durations.first) }
-    var chosenHour by rememberSaveable { mutableStateOf<Int?>(null) }
+    // The calendar opens only for "Other".
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
+    var shownMonth by remember { mutableStateOf(BookingDay(day.year, day.month, 1)) }
+    // The chosen run of back-to-back slots: its first hour and how many. Nothing is chosen at first.
+    var chosenStart by rememberSaveable { mutableStateOf<Int?>(null) }
+    var chosenHours by rememberSaveable { mutableIntStateOf(0) }
+    // Set when a tap would make the booking longer than MaxHours.
+    var overLimit by remember { mutableStateOf(false) }
     var guests by rememberSaveable { mutableIntStateOf(1) }
     val guestCount = guests.coerceIn(1, facility.maxPax)
-    var open by remember { mutableStateOf(FullSection.NONE) }
-    var shownMonth by remember { mutableStateOf(BookingDay(day.year, day.month, 1)) }
+    // Once today's morning has gone, a day opens on the afternoon.
+    val morningOver = day == today && nowHour >= SlotPeriod.MORNING.hours.last
+    var period by rememberSaveable(day) { mutableStateOf(if (morningOver) SlotPeriod.AFTERNOON else SlotPeriod.MORNING) }
+    val periodPosition by animateFloatAsState(period.ordinal.toFloat(), tween(250), label = "period")
 
-    // Every start time left today (or any on a later day) that leaves room for the whole duration.
-    val starts = (SlotHours.first..SlotHours.last - hours + 1).filter { day != today || it > nowHour }
-    val states = starts.associateWith { rangeState(facility.name, day, it, hours, facility.slotsLeft != null, today, nowHour) }
-    val bookable = starts.filter { states[it] == SlotState.OPEN || states[it] == SlotState.FEW_LEFT }
-    // A choice that a new facility, date or duration rules out falls back to the earliest free start.
-    val selectedHour = chosenHour?.takeIf { it in bookable } ?: bookable.firstOrNull()
+    val states = SlotHours.associateWith { slotState(facility.name, day, it, facility.slotsLeft != null, today, nowHour) }
+    val free = states.filterValues { it == SlotState.OPEN || it == SlotState.FEW_LEFT }.keys
+    val selected = chosenStart?.let { it until it + chosenHours }?.takeIf { run -> !run.isEmpty() && run.all { it in free } }
+    // A new facility or date that rules out the chosen slots drops them.
+    LaunchedEffect(facility.id, day) { if (selected == null) chosenStart = null }
+
+    fun onSlot(hour: Int) {
+        val run = selected
+        overLimit = false
+        when {
+            run == null -> { chosenStart = hour; chosenHours = 1 }
+            // An end slot comes off the run; taking the last one clears the choice.
+            hour == run.first -> { chosenStart = hour + 1; chosenHours = run.count() - 1 }
+            hour == run.last -> chosenHours = run.count() - 1
+            // The slot just before or after the run extends it, up to MaxHours.
+            hour == run.first - 1 || hour == run.last + 1 ->
+                if (run.count() < MaxHours) { chosenStart = minOf(run.first, hour); chosenHours = run.count() + 1 }
+                else overLimit = true
+            // Anywhere else starts a new run there.
+            else -> { chosenStart = hour; chosenHours = 1 }
+        }
+    }
 
     Column(modifier.fillMaxWidth()) {
         Column(
@@ -141,33 +163,52 @@ internal fun FullBookingView(
             FacilityStrip(ordered, facility.id) { facilityId = it }
             Spacer(Modifier.height(14.dp))
             GlassCard(padding = 0.dp) {
-                FieldRow(Icons.Rounded.CalendarMonth, "Date", expanded = open == FullSection.DATE,
-                    onClick = { open = if (open == FullSection.DATE) FullSection.NONE else FullSection.DATE }) {
+                FieldRow(Icons.Rounded.CalendarMonth, "Date") {
                     FieldValue("${day.label()} ${day.year}")
                 }
-                RevealSection(open == FullSection.DATE) {
+                // The same Today / Tomorrow / Other chips as the Quick view, across the card.
+                Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                    QuickDayChips(day, otherOpen = showCalendar,
+                        onPick = { savedDay = it; showCalendar = false },
+                        onOther = {
+                            if (!showCalendar) shownMonth = BookingDay(day.year, day.month, 1)
+                            showCalendar = !showCalendar
+                        })
+                }
+                RevealSection(showCalendar) {
                     MonthCalendar(
                         month = shownMonth, today = today, selected = day,
                         onMonthChange = { shownMonth = it },
-                        onSelect = { savedDay = it; open = FullSection.NONE }
+                        onSelect = { savedDay = it; showCalendar = false }
                     )
                 }
                 FieldDividerLine()
                 FieldRow(Icons.Rounded.Schedule, "Time") {
-                    Spacer(Modifier.height(8.dp))
-                    TimeChips(starts, states, selectedHour, scrollKey = listOf(facility.id, day, hours)) { chosenHour = it }
+                    if (selected != null) FieldValue("${hourLabel(selected.first)} – ${hourLabel(selected.last + 1)}")
+                    else FieldHint("Pick one or more slots")
+                }
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                    if (free.isEmpty()) {
+                        Text("No free times on this day. Try another date.",
+                            fontFamily = DMSans, fontSize = 14.sp, lineHeight = 19.sp, color = FacilityOrange)
+                    } else {
+                        PeriodToggle({ periodPosition }) { period = it }
+                        Spacer(Modifier.height(12.dp))
+                        Crossfade(period, label = "periodSlots") { shown ->
+                            SlotGrid(shown.hours, states, selected, ::onSlot)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            if (overLimit) "Bookings are up to $MaxHours hours" else "Tap up to $MaxHours back-to-back slots",
+                            fontFamily = DMSans, fontSize = 13.sp, color = if (overLimit) FacilityOrange else FacilityMuted
+                        )
+                    }
                 }
                 FieldDividerLine()
-                FieldRow(Icons.Rounded.HourglassBottom, "Duration", expanded = open == FullSection.DURATION,
-                    onClick = { open = if (open == FullSection.DURATION) FullSection.NONE else FullSection.DURATION }) {
-                    FieldValue(durationLabel(hours))
-                }
-                RevealSection(open == FullSection.DURATION, start = FieldTextStart) {
-                    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Durations.forEach { h ->
-                            OptionPill(durationLabel(h), h == hours, Modifier.weight(1f)) { hours = h; open = FullSection.NONE }
-                        }
-                    }
+                // Set by the slots: one hour each.
+                FieldRow(Icons.Rounded.HourglassBottom, "Duration") {
+                    if (selected != null) FieldValue(durationLabel(selected.count()))
+                    else FieldHint("From the slots you pick")
                 }
                 FieldDividerLine()
                 FieldRow(
@@ -185,10 +226,10 @@ internal fun FullBookingView(
             }
             Spacer(Modifier.height(16.dp))
         }
-        CheckAvailabilityButton(
-            enabled = selectedHour != null,
+        ContinueButton(
+            enabled = selected != null,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
-        ) { selectedHour?.let { onCheck(facility, day, it, guestCount, hours) } }
+        ) { selected?.let { onCheck(facility, day, it.first, guestCount, it.count()) } }
     }
 }
 
@@ -263,23 +304,16 @@ private fun FacilityThumb(facility: Facility, selected: Boolean, modifier: Modif
     }
 }
 
-// Where a row's label starts: 16dp padding, the 52dp icon and a 14dp gap.
-private val FieldTextStart = 82.dp
-
-/** One line of the booking card: a round icon, an optional small [label] over [content], and a chevron or [trailing]. */
+/** One line of the booking card: a round icon, an optional small [label] over [content], and an optional [trailing]. */
 @Composable
 private fun FieldRow(
     icon: ImageVector, label: String?,
     iconTint: Color = if (NavyGoldTheme) NavyGoldGold else FacilityGreen,
-    expanded: Boolean? = null, onClick: (() -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val turn by animateFloatAsState(if (expanded == true) 180f else 0f, label = "chevron")
     Row(
-        Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = label?.let { "Change $it" }, onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -293,10 +327,6 @@ private fun FieldRow(
             if (label != null) Text(label, fontFamily = DMSans, fontSize = 14.sp, color = FacilityMuted)
             content()
         }
-        if (expanded != null) {
-            Spacer(Modifier.width(8.dp))
-            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = FacilityInk, modifier = Modifier.size(28.dp).rotate(turn))
-        }
         trailing?.invoke(this)
     }
 }
@@ -306,18 +336,24 @@ private fun FieldValue(text: String) {
     Text(text, fontFamily = DMSans, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = FacilityInk, maxLines = 1)
 }
 
+/** Stands in for a [FieldValue] until there is one. */
+@Composable
+private fun FieldHint(text: String) {
+    Text(text, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = FacilityMuted, maxLines = 1)
+}
+
 @Composable
 private fun FieldDividerLine() {
     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = FieldDivider)
 }
 
 /**
- * The calendar or duration choices under their row. They appear at full height and only fade, then
- * scroll into view, so a row near the bottom of the screen doesn't open out of sight.
+ * The calendar under the date chips. It appears at full height and only fades, then scrolls into
+ * view, so it doesn't open out of sight.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RevealSection(visible: Boolean, start: androidx.compose.ui.unit.Dp = 16.dp, content: @Composable () -> Unit) {
+private fun RevealSection(visible: Boolean, content: @Composable () -> Unit) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(150)),
@@ -329,39 +365,43 @@ private fun RevealSection(visible: Boolean, start: androidx.compose.ui.unit.Dp =
             withFrameNanos { }
             requester.bringIntoView()
         }
-        Box(Modifier.bringIntoViewRequester(requester).padding(start = start, end = 16.dp, bottom = 14.dp)) { content() }
+        Box(Modifier.bringIntoViewRequester(requester).padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) { content() }
     }
 }
 
+private const val GridColumns = 4
+private val ChipHeight = 46.dp
+private val ChipGap = 8.dp
+private val GridRows = SlotPeriod.entries.maxOf { (it.hours.count() + GridColumns - 1) / GridColumns }
+
 /**
- * Start times in one sliding row. Booked-out starts stay visible but struck through; an orange dot
- * marks one with few places left. The row slides to the chosen time whenever [scrollKey] changes.
+ * One half of the day's hourly slots, four to a row. Each half is as tall as the longest, so the
+ * card doesn't jump when switching. Past and booked-out slots can't be tapped; full ones are struck
+ * through, and an orange dot marks one with few places left.
  */
 @Composable
-private fun TimeChips(starts: List<Int>, states: Map<Int, SlotState>, selected: Int?, scrollKey: Any, onSelect: (Int) -> Unit) {
-    if (starts.none { states[it] == SlotState.OPEN || states[it] == SlotState.FEW_LEFT }) {
-        Text("No free times on this day. Try another date or a shorter duration.",
-            fontFamily = DMSans, fontSize = 14.sp, lineHeight = 19.sp, color = FacilityOrange)
-        return
-    }
-    val listState = rememberLazyListState()
-    LaunchedEffect(scrollKey) {
-        val index = starts.indexOf(selected)
-        if (index >= 0) listState.animateScrollToItem(index)
-    }
-    LazyRow(state = listState, modifier = Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(starts, key = { it }) { hour ->
-            TimeChip(hour, states[hour] ?: SlotState.FULL, hour == selected) { onSelect(hour) }
+private fun SlotGrid(hours: IntRange, states: Map<Int, SlotState>, selected: IntRange?, onTap: (Int) -> Unit) {
+    Column(
+        Modifier.heightIn(min = ChipHeight * GridRows + ChipGap * (GridRows - 1)),
+        verticalArrangement = Arrangement.spacedBy(ChipGap)
+    ) {
+        hours.chunked(GridColumns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(ChipGap)) {
+                row.forEach { hour ->
+                    TimeChip(hour, states[hour] ?: SlotState.FULL, selected?.contains(hour) == true, Modifier.weight(1f)) { onTap(hour) }
+                }
+                repeat(GridColumns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
 
 @Composable
-private fun TimeChip(hour: Int, state: SlotState, selected: Boolean, onClick: () -> Unit) {
+private fun TimeChip(hour: Int, state: SlotState, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val enabled = state == SlotState.OPEN || state == SlotState.FEW_LEFT
     val shape = RoundedCornerShape(12.dp)
     Box(
-        Modifier.width(70.dp).height(46.dp)
+        modifier.height(ChipHeight)
             .then(if (selected) Modifier.shadow(3.dp, shape, ambientColor = FieldShadow, spotColor = FieldShadow) else Modifier)
             .clip(shape)
             .background(when {
@@ -370,7 +410,8 @@ private fun TimeChip(hour: Int, state: SlotState, selected: Boolean, onClick: ()
                 else -> SolidColor(FacilityMuted.copy(alpha = .08f))
             })
             .border(if (selected) 1.5.dp else 1.dp, if (selected) ChosenEdge else FieldDivider, shape)
-            .selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick),
+            // Slots toggle on and off, since several can be chosen.
+            .toggleable(selected, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() }),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -381,27 +422,11 @@ private fun TimeChip(hour: Int, state: SlotState, selected: Boolean, onClick: ()
                 enabled -> FacilityInk
                 else -> FacilityMuted.copy(alpha = .5f)
             },
-            textDecoration = if (enabled) null else TextDecoration.LineThrough
+            textDecoration = if (state == SlotState.FULL) TextDecoration.LineThrough else null
         )
         if (state == SlotState.FEW_LEFT && !selected) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 6.dp).size(6.dp).clip(CircleShape).background(FacilityOrange))
         }
-    }
-}
-
-@Composable
-private fun OptionPill(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    Box(
-        modifier.height(42.dp).clip(shape)
-            .background(if (selected) ChosenFill else SolidColor(Color.White))
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) ChosenEdge else FieldDivider, shape)
-            .selectable(selected, role = Role.RadioButton, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, fontFamily = DMSans, fontSize = 15.sp, maxLines = 1,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) Color.White else FacilityInk)
     }
 }
 
@@ -419,9 +444,9 @@ private fun StepperButton(icon: ImageVector, description: String, enabled: Boole
     }
 }
 
-/** Navy with a gold edge in Theme 4, the booking green otherwise; greyed while no start time is free. */
+/** Navy with a gold edge in Theme 4, the booking green otherwise; greyed until a slot is chosen. */
 @Composable
-private fun CheckAvailabilityButton(enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ContinueButton(enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     val shadow = if (NavyGoldTheme) NavyGoldShadow else Color(0x4016A37F)
     Row(
@@ -435,7 +460,7 @@ private fun CheckAvailabilityButton(enabled: Boolean, modifier: Modifier, onClic
         verticalAlignment = Alignment.CenterVertically
     ) {
         val tint = if (enabled) Color.White else FacilityMuted
-        Text("Check Availability", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = tint)
+        Text("Continue", fontFamily = DMSans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = tint)
         Spacer(Modifier.width(10.dp))
         Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = tint, modifier = Modifier.size(22.dp))
     }

@@ -3,8 +3,8 @@ package com.greenbotz.greengate
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.fragment.app.FragmentActivity
 import com.greenbotz.greengate.core.call.ReceiverCallController
 import com.greenbotz.greengate.core.call.provider.ReceiverCallCredentials
 import com.greenbotz.greengate.core.call.provider.SharedCallConfig
@@ -21,6 +22,8 @@ import com.greenbotz.greengate.core.push.IncomingCallNotifier
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.core.session.AppPreferences
 import com.greenbotz.greengate.ui.navigation.MainScreen
+import com.greenbotz.greengate.ui.screens.auth.BiometricOfferDialog
+import com.greenbotz.greengate.ui.screens.auth.BiometricUnlockScreen
 import com.greenbotz.greengate.ui.screens.auth.LoginScreen
 import com.greenbotz.greengate.ui.screens.auth.IntroVideoScreen
 import com.greenbotz.greengate.ui.screens.auth.LuxuryLoginScreen
@@ -28,13 +31,20 @@ import com.greenbotz.greengate.ui.screens.auth.SplashScreen
 import com.greenbotz.greengate.ui.theme.GreenGateTheme
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+// Fingerprint / face sign-in asks again when the app comes back after this long away.
+private const val RelockAfterMillis = 5 * 60_000L
+
+// A FragmentActivity because androidx.biometric's BiometricPrompt needs one.
+class MainActivity : FragmentActivity() {
 
     private lateinit var callController: ReceiverCallController
+    private var stoppedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Opened afresh while the app was still running in the background (a cold start locks in restore()).
+        if (savedInstanceState == null) ResidentSession.lock()
 
         configureLockscreenFlags()
         callController = ReceiverCallController(applicationContext)
@@ -49,9 +59,11 @@ class MainActivity : ComponentActivity() {
                 val session = ResidentSession.state
                 val scope = rememberCoroutineScope()
                 LaunchedEffect(Unit) { ResidentSession.restore() }
+                val locked = session is ResidentSession.State.SignedIn && ResidentSession.locked
                 // Needed for a call to open the call screen by itself when the app is closed.
-                LaunchedEffect(session is ResidentSession.State.SignedIn) {
-                    if (session is ResidentSession.State.SignedIn) {
+                // Waits for unlocking, so it doesn't land on top of the fingerprint / face prompt.
+                LaunchedEffect(session is ResidentSession.State.SignedIn && !locked) {
+                    if (session is ResidentSession.State.SignedIn && !locked) {
                         IncomingCallNotifier.promptForMissingPermissions(this@MainActivity)
                     }
                 }
@@ -70,8 +82,18 @@ class MainActivity : ComponentActivity() {
                         onSwitchServer = { server ->
                             showLoginPromo = true
                             scope.launch { ResidentSession.switchEnvironment(server) }
-                        }
+                        },
+                        lockScreen = if (locked) {
+                            {
+                                BiometricUnlockScreen(onUseSms = {
+                                    // Straight to the number form: no intro video for a returning resident.
+                                    showLoginPromo = false
+                                    scope.launch { ResidentSession.signOut(keepBiometricLogin = true) }
+                                })
+                            }
+                        } else null
                     )
+                    if (!locked && ResidentSession.biometricOfferPending) BiometricOfferDialog()
                 } else {
                     if (showLoginPromo) {
                         IntroVideoScreen(onFinished = { showLoginPromo = false })
@@ -86,12 +108,14 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStart() {
         super.onStart()
+        if (stoppedAt != 0L && SystemClock.elapsedRealtime() - stoppedAt > RelockAfterMillis) ResidentSession.lock()
         IncomingCallNotifier.appInForeground = true
         // Screen back on / app reopened during a call: restart the camera.
         if (::callController.isInitialized) callController.onAppForegrounded()
     }
 
     override fun onStop() {
+        stoppedAt = SystemClock.elapsedRealtime()
         IncomingCallNotifier.appInForeground = false
         // Power button / home during a call: pause our video cleanly.
         if (::callController.isInitialized) callController.onAppBackgrounded()

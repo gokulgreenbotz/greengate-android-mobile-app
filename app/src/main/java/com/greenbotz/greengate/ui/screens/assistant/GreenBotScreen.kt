@@ -469,11 +469,19 @@ internal fun GreenBotScreen(navController: NavController, voiceAllowed: Boolean 
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.Center
                                     ) {
-                                        GreenBotOrb(
-                                            Modifier.size(orbSize), listening = voice.isListening,
-                                            speaking = voice.isSpeaking, level = voice.level,
-                                            processing = voice.isProcessing || (shownVoice && waitingForReply)
-                                        )
+                                        val orbProcessing = voice.isProcessing || (shownVoice && waitingForReply)
+                                        // Theme 4's chat uses the same orb as its voice screen.
+                                        if (AppPreferences.theme == AppTheme.FOUR) {
+                                            ConciergeOrb(
+                                                Modifier.size(orbSize), listening = voice.isListening,
+                                                speaking = voice.isSpeaking, level = voice.level, processing = orbProcessing
+                                            )
+                                        } else {
+                                            GreenBotOrb(
+                                                Modifier.size(orbSize), listening = voice.isListening,
+                                                speaking = voice.isSpeaking, level = voice.level, processing = orbProcessing
+                                            )
+                                        }
                                         Spacer(Modifier.height(12.dp))
                                         BotHeading(shownVoice, voice.isListening, voice.isProcessing || (shownVoice && waitingForReply),
                                             voice.isSpeaking, compactVoice, privacyNotice = claudeOn)

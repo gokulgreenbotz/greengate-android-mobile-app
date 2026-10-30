@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="background_cream">#FFF3EFE6</color>
+    <!-- Behind the launch splash's icon: the deep navy of the in-app splash (splash_greengate) that follows. -->
+    <color name="splash_background">#FF031B39</color>
     <color name="cream_background">#FFF3EFE6</color>
     <color name="primary_green">#FF5F7F58</color>
     <color name="primary_sage">#FF5F7F58</color>

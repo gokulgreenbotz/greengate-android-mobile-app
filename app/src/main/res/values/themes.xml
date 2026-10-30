@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.GreenGate" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/white</item>
         <item name="android:windowBackground">@color/background_cream</item>
         <item name="android:colorPrimary">@color/primary_green</item>
+        <!-- Android 12+ launch splash. Left to itself it stretches the launcher icon's layers, which
+             are only 324-432 px, to about 2x and they blur; this is the same icon at 1152 px
+             (288dp at 4x), on the navy of the in-app splash that follows. -->
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/splash_background</item>
     </style>
 </resources>

@@ -111,9 +111,20 @@ internal fun SosScreen(onDismiss: () -> Unit, onCallReceiverHarness: () -> Unit)
     val dragOffset = remember { Animatable(0f) }
     val dismissDistance = with(density) { 140.dp.toPx() }
 
-    Dialog({ close() }, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // usePlatformDefaultWidth = true so the sheet is measured by the dialog window's real size; with
+    // false, Compose measures it by the configured screen size, which can be taller than the window,
+    // and the sheet's last rows ended up off screen instead of scrolling. The window is made full
+    // screen below instead.
+    Dialog({ close() }, DialogProperties(usePlatformDefaultWidth = true, decorFitsSystemWindows = false)) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect {
+            window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            // The window stops above the navigation bar, which then showed as a black strip under the
+            // sheet. Drawing the bar's background makes it dimmed like the top on Android 15, and white
+            // like the sheet on older versions.
+            window?.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            @Suppress("DEPRECATION")
+            window?.navigationBarColor = android.graphics.Color.WHITE
             window?.setDimAmount(.45f)
             // Frost the home screen behind the sheet where the device supports window blur.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -172,7 +183,9 @@ internal fun SosScreen(onDismiss: () -> Unit, onCallReceiverHarness: () -> Unit)
                             colors = ButtonDefaults.buttonColors(containerColor = SosGreen, contentColor = Color.White),
                             modifier = Modifier.fillMaxWidth().height(52.dp)
                         ) {
-                            Text("Close", fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                            // Colour set here: the app's text styles carry their own dark colour, which wins
+                            // over the button's white content colour.
+                            Text("Close", color = Color.White, fontFamily = DMSans, fontSize = 17.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }

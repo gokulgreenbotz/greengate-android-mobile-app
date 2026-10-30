@@ -34,11 +34,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.FitnessCenter
@@ -346,7 +346,7 @@ fun BookFacilityScreen(navController: NavController) {
 
 @Composable
 private fun FacilityHeader(onBack: () -> Unit, onCalendar: () -> Unit) {
-    // A row rather than a centred box, so the title makes room as the History pill grows on small phones.
+    // A row rather than a centred box, so the title makes room as the My Bookings pill grows on small phones.
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         GlassCircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier, onBack)
         Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -362,7 +362,7 @@ private fun FacilityHeader(onBack: () -> Unit, onCalendar: () -> Unit) {
             )
         }
         // Sized and shadowed to match Back on this screen.
-        FoldingLabelButton(Icons.Rounded.CalendarMonth, "History", size = 52.dp, iconSize = 24.dp,
+        FoldingLabelButton(Icons.Rounded.CalendarMonth, "My Bookings", size = 52.dp, iconSize = 24.dp,
             ambientShadow = if (NavyGoldTheme) NavyGoldShadow else Color(0x33000000),
             spotShadow = if (NavyGoldTheme) NavyGoldShadow else Color.Black, onClick = onCalendar)
     }
@@ -464,17 +464,37 @@ private fun FacilityCard(
                         )
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                // Quick booking drops the date and slot picker under this card (filled while it's open);
-                // the calendar opens the Full booking view for this facility.
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CardIconButton(Icons.Rounded.Bolt,
-                        if (expanded) "Close quick booking for ${facility.name}" else "Quick booking for ${facility.name}",
-                        active = expanded, onClick = onClick)
-                    CardIconButton(Icons.Rounded.EventAvailable, "Full booking for ${facility.name}", active = false, onClick = onFullBooking)
-                }
+            }
+            // Book opens the Full booking view for this facility; the bolt after it drops the Quick
+            // date and slot picker under this card (filled while it's open).
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BookButton(facility.name, Modifier.weight(1f), onFullBooking)
+                Spacer(Modifier.width(10.dp))
+                CardIconButton(Icons.Rounded.Bolt,
+                    if (expanded) "Close quick booking for ${facility.name}" else "Quick booking for ${facility.name}",
+                    active = expanded, onClick = onClick)
             }
         }
+    }
+}
+
+/** A card's main action, opening its Full booking view. Navy with a gold edge in Theme 4, the booking green otherwise. */
+@Composable
+private fun BookButton(facilityName: String, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    val shadow = if (NavyGoldTheme) NavyGoldShadow else Color(0x4016A37F)
+    Row(
+        modifier.height(44.dp).shadow(4.dp, shape, ambientColor = shadow, spotColor = shadow)
+            .clip(shape)
+            .background(greenButton(Color(0xFF2AA07D)))
+            .then(if (NavyGoldTheme) Modifier.border(1.dp, Color(0xFFD9B36A), shape) else Modifier)
+            .clickable(role = Role.Button, onClickLabel = "Book $facilityName", onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Book", fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color.White, modifier = Modifier.size(20.dp))
     }
 }
 

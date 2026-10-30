@@ -476,7 +476,7 @@ private fun LoginInput(
 }
 
 @Composable
-private fun HorizontalRule(modifier: Modifier) {
+internal fun HorizontalRule(modifier: Modifier) {
     Box(modifier.height(1.dp).background(Stroke.copy(alpha = .55f)))
 }
 

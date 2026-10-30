@@ -53,6 +53,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.material.icons.extended)
+    // Fingerprint / face sign-in. BiometricPrompt needs a FragmentActivity (MainActivity).
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.navigation.compose)
 
     // Multi-Provider Video Calling dependencies

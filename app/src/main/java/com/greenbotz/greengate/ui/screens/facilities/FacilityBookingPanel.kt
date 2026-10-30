@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -88,8 +87,8 @@ private val WeekdayNames = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "T
 // Hourly slots from 7 AM; the last one starts at 9 PM.
 internal val SlotHours = 7..21
 
-/** The slot grid shows one half of the day at a time; noon onwards is all Afternoon. */
-private enum class SlotPeriod(val label: String, val hours: IntRange) {
+/** The slot grids show one half of the day at a time; noon onwards is all Afternoon. */
+internal enum class SlotPeriod(val label: String, val hours: IntRange) {
     MORNING("Morning", SlotHours.first..11),
     AFTERNOON("Afternoon", 12..SlotHours.last)
 }
@@ -108,21 +107,6 @@ internal fun slotState(facility: String, day: BookingDay, hour: Int, busy: Boole
     return when {
         roll < if (busy) 40 else 18 -> SlotState.FULL
         roll < if (busy) 60 else 30 -> SlotState.FEW_LEFT
-        else -> SlotState.OPEN
-    }
-}
-
-/**
- * A booking of [hours] from [start]: FULL or PAST if any hour in it can't be booked or it runs past
- * the last slot, FEW_LEFT if any hour is nearly full, otherwise OPEN.
- */
-internal fun rangeState(facility: String, day: BookingDay, start: Int, hours: Int, busy: Boolean, today: BookingDay, nowHour: Int): SlotState {
-    if (start + hours - 1 > SlotHours.last) return SlotState.FULL
-    val states = (start until start + hours).map { slotState(facility, day, it, busy, today, nowHour) }
-    return when {
-        SlotState.PAST in states -> SlotState.PAST
-        SlotState.FULL in states -> SlotState.FULL
-        SlotState.FEW_LEFT in states -> SlotState.FEW_LEFT
         else -> SlotState.OPEN
     }
 }
@@ -336,7 +320,7 @@ private fun SlotPicker(
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Select Time", Modifier.weight(1f), fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
-            PeriodToggle(pager) { period ->
+            PeriodToggle({ pager.currentPage + pager.currentPageOffsetFraction }) { period ->
                 scope.launch { pager.animateScrollToPage(period.ordinal, animationSpec = periodSlide()) }
             }
         }
@@ -392,17 +376,19 @@ private val PeriodSegmentWidth = 88.dp
 private fun periodSlide() = tween<Float>(250, easing = FastOutSlowInEasing)
 
 /**
- * Morning / Afternoon segmented switch beside "Select Time". Its highlight is placed from the
- * pager's live scroll position, so it glides along with a swipe rather than jumping at the end.
+ * Morning / Afternoon segmented switch. Its highlight sits at [position] (0 Morning, 1 Afternoon):
+ * the Quick view reads it from the pager's live scroll, so it glides along with a swipe rather than
+ * jumping at the end, and the Full view animates it.
  */
 @Composable
-private fun PeriodToggle(pager: PagerState, onSelect: (SlotPeriod) -> Unit) {
-    val current by remember { derivedStateOf { (pager.currentPage + pager.currentPageOffsetFraction).roundToInt() } }
+internal fun PeriodToggle(position: () -> Float, onSelect: (SlotPeriod) -> Unit) {
+    val latestPosition by rememberUpdatedState(position)
+    val current by remember { derivedStateOf { latestPosition().roundToInt() } }
     Box(Modifier.clip(CircleShape).background(Color(0xE6FFFFFF)).border(1.dp, FacilityGlassBorder, CircleShape).padding(3.dp)) {
         Box(
             Modifier.offset {
-                val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, SlotPeriod.entries.lastIndex.toFloat())
-                IntOffset((position * PeriodSegmentWidth.toPx()).roundToInt(), 0)
+                val at = latestPosition().coerceIn(0f, SlotPeriod.entries.lastIndex.toFloat())
+                IntOffset((at * PeriodSegmentWidth.toPx()).roundToInt(), 0)
             }.size(PeriodSegmentWidth, 32.dp).background(if (NavyGoldTheme) NavyGoldCream else themed(Color(0xFFCDF3E4), ClassicMint), CircleShape)
         )
         Row(Modifier.selectableGroup()) {

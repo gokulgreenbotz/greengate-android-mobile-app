@@ -37,6 +37,25 @@ object ResidentSession {
     var state by mutableStateOf<State>(State.Restoring)
         private set
 
+    /**
+     * Fingerprint / face sign-in is on for this phone: a saved sign-in opens [locked]. Turned off
+     * by Log out, so whoever signs in next chooses for themselves.
+     */
+    var biometricLogin by mutableStateOf(false)
+        private set
+
+    /**
+     * True while a saved sign-in waits for the resident's fingerprint or face. Set at launch and by
+     * [lock]; cleared by [unlock] or a new SMS sign-in. A UI gate: the session itself keeps running,
+     * so door calls still ring.
+     */
+    var locked by mutableStateOf(false)
+        private set
+
+    /** An SMS sign-in just finished with biometric sign-in off, so the app can offer to turn it on. */
+    var biometricOfferPending by mutableStateOf(false)
+        private set
+
     /** First name shown in greetings: the signed-in resident's, "Alex" for the demo account. */
     val firstName: String
         get() = when (val s = state) {
@@ -78,7 +97,28 @@ object ResidentSession {
         if (::store.isInitialized) return
         store = SessionStore(context.applicationContext)
         ApiEnvironment.entries.find { it.name == store.environment }?.let { environment = it }
+        biometricLogin = store.biometricLogin
         api = ResidentAuthApi(environment.apiUrl)
+    }
+
+    fun useBiometricLogin(on: Boolean) {
+        store.biometricLogin = on
+        biometricLogin = on
+        biometricOfferPending = false
+    }
+
+    fun dismissBiometricOffer() {
+        biometricOfferPending = false
+    }
+
+    /** Locks a running sign-in again, e.g. when the app comes back after a while. */
+    fun lock() {
+        if (biometricLogin && state is State.SignedIn) locked = true
+    }
+
+    /** Call only after the resident passed the fingerprint / face check. */
+    fun unlock() {
+        locked = false
     }
 
     /** Points the app at another server. A session belongs to one server, so this signs out. */
@@ -94,12 +134,15 @@ object ResidentSession {
     /** Turns a saved refresh token back into a session. Runs once per process. */
     suspend fun restore() {
         if (state != State.Restoring) return
-        state = if (io { store.refreshToken } == null) State.SignedOut else try {
+        val restored = if (io { store.refreshToken } == null) State.SignedOut else try {
             State.SignedIn(authorized(api::me))
         } catch (e: ResidentApiException) {
             // Offline or a server error: keep the sign-in and let the next call retry.
             if (e.code in SessionEndedCodes) State.SignedOut else State.SignedIn(emptyList())
         }
+        // Both in the same frame, so the app never shows unlocked first.
+        locked = biometricLogin && restored is State.SignedIn
+        state = restored
         registerPush()
     }
 
@@ -171,6 +214,8 @@ object ResidentSession {
         val (tokens, households) = io { api.verifyCode(phone, code, device()) }
         io { store.refreshToken = tokens.refreshToken }
         accessToken = tokens.accessToken
+        locked = false
+        biometricOfferPending = !biometricLogin
         state = State.SignedIn(households)
         registerPush()
     }
@@ -179,14 +224,23 @@ object ResidentSession {
         state = State.Demo
     }
 
-    /** Signs out on this phone at once, then ends the session on the server as well, if it can. */
-    suspend fun signOut() = signOut(api)
+    /**
+     * Signs out on this phone at once, then ends the session on the server as well, if it can.
+     * [keepBiometricLogin] is for "Use SMS code instead" on the lock page: the same resident is
+     * signing back in, so their fingerprint / face setting stays.
+     */
+    suspend fun signOut(keepBiometricLogin: Boolean = false) {
+        if (!keepBiometricLogin) useBiometricLogin(false)
+        signOut(api)
+    }
 
     private suspend fun signOut(server: ResidentAuthApi) {
         val access = accessToken
         val refresh = io { store.refreshToken }
         accessToken = null
         io { store.refreshToken = null }
+        locked = false
+        biometricOfferPending = false
         state = State.SignedOut
         try {
             io {
@@ -219,6 +273,7 @@ object ResidentSession {
             if (e.code in SessionEndedCodes) {
                 accessToken = null
                 io { store.refreshToken = null }
+                locked = false
                 state = State.SignedOut
             }
             throw e

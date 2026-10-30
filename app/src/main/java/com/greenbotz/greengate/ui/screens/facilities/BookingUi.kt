@@ -1,6 +1,8 @@
 package com.greenbotz.greengate.ui.screens.facilities
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -23,12 +25,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -59,6 +66,7 @@ import com.greenbotz.greengate.ui.theme.PrimaryGreen
 import com.greenbotz.greengate.ui.theme.PrimaryGreenDark
 import com.greenbotz.greengate.ui.theme.SoftGreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // Theme 1 - Classic trades the glass for the plain white, cream and sage of its Home screen.
 // AppPreferences.theme is snapshot state, so composables reading these recompose on a theme change.
@@ -147,8 +155,10 @@ internal fun GlassIconButton(icon: ImageVector, description: String, modifier: M
 }
 
 /**
- * A round glass icon button that first opens as a pill with [label] beside the icon, then folds the
+ * A round icon button that first opens as a pill with [label] beside the icon, then folds the
  * label away after a few seconds. Shows once per visit: coming back to the screen keeps it folded.
+ * Filled with the booking green (navy with a gold edge in Theme 4) so it isn't mistaken for the
+ * white Back button beside it, and a soft halo ripples out from it a few times while the label shows.
  */
 @Composable
 internal fun FoldingLabelButton(
@@ -156,19 +166,47 @@ internal fun FoldingLabelButton(
     ambientShadow: Color = Color(0x22000000), spotShadow: Color = Color(0x22000000), onClick: () -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
+    // 0 to 1 as one halo grows and fades; 0 draws nothing.
+    val pulse = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         if (!expanded) return@LaunchedEffect
+        launch {
+            // Wait out the screen's slide-in, so the first halo is seen.
+            delay(PulseDelayMillis)
+            repeat(PulseCount) {
+                pulse.snapTo(0f)
+                pulse.animateTo(1f, tween(PulseMillis, easing = LinearOutSlowInEasing))
+                delay(PulseGapMillis)
+            }
+            pulse.snapTo(0f)
+        }
         delay(FoldingLabelMillis)
         expanded = false
     }
+    val haloColor = if (NavyGoldTheme) Color(0xFFD9B36A) else FacilityGreen
     Row(
-        Modifier.height(size).shadow(6.dp, CircleShape, ambientColor = ambientShadow, spotColor = spotShadow)
-            .clip(CircleShape).background(Color(0xF2FFFFFF))
+        Modifier
+            // Before the clip, so the halo can spread past the button's edge.
+            .drawBehind {
+                val p = pulse.value
+                if (p > 0f) {
+                    val grow = p * PulseSpread.toPx()
+                    drawRoundRect(
+                        haloColor.copy(alpha = (1f - p) * .45f),
+                        topLeft = Offset(-grow, -grow),
+                        size = Size(this.size.width + grow * 2, this.size.height + grow * 2),
+                        cornerRadius = CornerRadius(this.size.height / 2 + grow)
+                    )
+                }
+            }
+            .height(size).shadow(6.dp, CircleShape, ambientColor = ambientShadow, spotColor = spotShadow)
+            .clip(CircleShape).background(greenButton(Color(0xFF2AA07D)))
+            .then(if (NavyGoldTheme) Modifier.border(1.dp, Color(0xFFD9B36A), CircleShape) else Modifier)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = (size - iconSize) / 2),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, if (expanded) null else label, tint = FacilityInk, modifier = Modifier.size(iconSize))
+        Icon(icon, if (expanded) null else label, tint = Color.White, modifier = Modifier.size(iconSize))
         AnimatedVisibility(
             visible = expanded,
             enter = expandHorizontally(FoldingLabelSpring, expandFrom = Alignment.Start) + fadeIn(),
@@ -176,14 +214,20 @@ internal fun FoldingLabelButton(
             exit = shrinkHorizontally(FoldingLabelSpring, shrinkTowards = Alignment.Start) + fadeOut(tween(180))
         ) {
             Text(label, Modifier.padding(start = 8.dp, end = 4.dp), maxLines = 1,
-                fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FacilityInk)
+                fontFamily = DMSans, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
     }
 }
 
 private val FoldingLabelSpring = spring<IntSize>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
-// Long enough to read past the 380 ms slide-in.
-private const val FoldingLabelMillis = 2500L
+// Long enough to notice and read the label well after the 380 ms slide-in.
+private const val FoldingLabelMillis = 5000L
+// Three halos, finished just before the label folds.
+private const val PulseDelayMillis = 400L
+private const val PulseCount = 3
+private const val PulseMillis = 1100
+private const val PulseGapMillis = 300L
+private val PulseSpread = 10.dp
 
 @Composable
 internal fun GlassCard(

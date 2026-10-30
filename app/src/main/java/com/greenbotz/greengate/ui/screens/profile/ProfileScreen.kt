@@ -53,6 +53,12 @@ import com.greenbotz.greengate.core.session.IconSet
 import com.greenbotz.greengate.core.session.LoginExperience
 import com.greenbotz.greengate.core.session.ResidentSession
 import com.greenbotz.greengate.ui.screens.assistant.greenBotVoiceFor
+import com.greenbotz.greengate.ui.screens.auth.BiometricStatus
+import com.greenbotz.greengate.ui.screens.auth.biometricIcon
+import com.greenbotz.greengate.ui.screens.auth.biometricLabel
+import com.greenbotz.greengate.ui.screens.auth.biometricStatus
+import com.greenbotz.greengate.ui.screens.auth.findFragmentActivity
+import com.greenbotz.greengate.ui.screens.auth.turnOnBiometricLogin
 import com.greenbotz.greengate.ui.screens.home.LayeredActionIcon
 import com.greenbotz.greengate.ui.screens.home.LayeredIconSetZero
 import com.greenbotz.greengate.ui.screens.home.MarinaBackground
@@ -316,6 +322,7 @@ fun ProfileScreen(
                     }
                 }
             }
+            if (ResidentSession.state is ResidentSession.State.SignedIn) BiometricLoginSetting()
             Spacer(Modifier.height(24.dp))
             Text("ACCOUNT", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
             Spacer(Modifier.height(8.dp))
@@ -339,6 +346,61 @@ fun ProfileScreen(
                         color = ProfileLogoutRed, modifier = Modifier.weight(1f))
                 }
             }
+        }
+    }
+}
+
+/** Fingerprint / face sign-in switch. Hidden on phones that can't check either for the app. */
+@Composable
+private fun BiometricLoginSetting() {
+    val context = LocalContext.current
+    val status = remember(context) { biometricStatus(context) }
+    if (status == BiometricStatus.UNAVAILABLE) return
+    val label = remember(context) { biometricLabel(context) }
+    val ready = status == BiometricStatus.READY
+    val on = ResidentSession.biometricLogin
+    var note by remember { mutableStateOf<String?>(null) }
+    fun toggle(want: Boolean) {
+        note = null
+        if (!want) ResidentSession.useBiometricLogin(false)
+        // Turning on asks for the fingerprint / face first, so it's known to work.
+        else context.findFragmentActivity()?.turnOnBiometricLogin(label) { note = it }
+    }
+    Spacer(Modifier.height(24.dp))
+    Text("SIGN-IN", fontFamily = DMSans, fontSize = 12.sp, letterSpacing = 1.5.sp, color = ProfileMuted)
+    Spacer(Modifier.height(8.dp))
+    Surface(
+        shape = RoundedCornerShape(16.dp), color = ProfileCream, shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.fillMaxWidth()
+                .clickable(enabled = ready, role = Role.Switch) { toggle(!on) }
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(ProfileGreen.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(biometricIcon(label), null, tint = ProfileGreen, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("${label.replaceFirstChar { it.uppercase() }} sign-in", fontFamily = DMSans, fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium, color = ProfileInk)
+                Text(
+                    note ?: if (ready) "Open GreenGate with your $label instead of an SMS code"
+                    else "Add a $label in your phone's Settings first",
+                    fontFamily = DMSans, fontSize = 12.sp, color = ProfileMuted
+                )
+            }
+            Switch(
+                checked = on,
+                onCheckedChange = { toggle(it) },
+                enabled = ready,
+                colors = SwitchDefaults.colors(checkedTrackColor = ProfileGreen)
+            )
         }
     }
 }
